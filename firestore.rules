@@ -1,0 +1,156 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Admin collection - allow admins to read their own document and query by email
+    match /admins/{document=**} {
+      allow read: if true; // Allow querying by email
+      allow write: if true; // Allow admin operations
+    }
+
+    // Malls collection - allow authenticated users to read (for now, admin only via logic)
+    match /malls/{mallId} {
+      allow read: if true; // Allow reading malls list
+      allow create, update, delete: if true; // Allow manager operations
+      
+      // Products subcollection
+      match /products/{product=**} {
+        allow read: if true;
+        allow write: if true; // Allow manager to manage products
+      }
+
+      // Barcodes subcollection
+      match /barcodes/{barcode=**} {
+        allow read: if true;
+        allow write: if true; // Allow manager to manage barcodes
+      }
+
+      // Payments subcollection
+      match /payments/{payment=**} {
+        allow read: if true;
+        allow write: if true; // Allow writing payment records during checkout
+      }
+
+      // Bills subcollection (checkout history)
+      match /bills/{bill=**} {
+        allow read: if true;
+        allow write: if true; // Allow saving bill records during checkout
+      }
+
+      // Managers subcollection
+      match /managers/{manager=**} {
+        allow read: if true;
+        allow write: if true; // Allow manager login to update lastLoginAt
+      }
+
+      // Promotions subcollection
+      match /promotions/{promotion=**} {
+        allow read: if true;
+        allow write: if true; // Allow manager to manage promotions
+      }
+
+      // Staff activity subcollection
+      match /staff_activity/{activity=**} {
+        allow read: if true;
+        allow write: if true; // Allow manager to log activities
+      }
+    }
+
+    // Mall subscriptions
+    match /mall_subscriptions/{document=**} {
+      allow read: if true;
+      allow write: if true; // Allow admin to manage subscriptions
+    }
+
+    // Managers collection
+    match /managers/{document=**} {
+      allow read: if true;
+      allow write: if true; // Allow admin to manage managers
+    }
+
+    // Manager index
+    match /manager_index/{document=**} {
+      allow read: if true;
+      allow write: if true; // Allow manager login to update lastLoginAt
+    }
+
+    // Announcements
+    match /announcements/{document=**} {
+      allow read: if true;
+      allow create: if true; // Admin can create
+      allow write: if false;
+    }
+
+    // Support requests
+    match /support_requests/{document=**} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // Users collection
+    match /users/{uid} {
+      allow read, write: if request.auth.uid == uid;
+      
+      match /bills/{bill=**} {
+        allow read, write: if request.auth.uid == uid || request.auth == null; // Allow unauthenticated checkout history
+      }
+
+      match /payments/{payment=**} {
+        allow read, write: if request.auth.uid == uid || request.auth == null; // Allow unauthenticated checkout history
+      }
+    }
+
+    // Other collections used by the system
+    match /announcements/{document=**} {
+      allow read: if true;
+    }
+
+    match /barcodes/{document=**} {
+      allow read: if true;
+    }
+
+    match /bills/{document=**} {
+      allow read: if true;
+      allow write: if true; // Allow saving bill records
+    }
+
+    match /email_otp_signup/{document=**} {
+      allow read, write: if true; // Needed for signup
+    }
+
+    match /phone_otp/{document=**} {
+      allow read, write: if true; // Needed for OTP verification
+    }
+
+    match /password_reset_otp/{document=**} {
+      allow read, write: if true; // Needed for password reset
+    }
+
+    match /payments/{document=**} {
+      allow read: if true;
+    }
+
+    match /products/{document=**} {
+      allow read: if true;
+    }
+
+    match /promotions/{document=**} {
+      allow read: if true;
+    }
+
+    match /staff_activity/{document=**} {
+      allow read: if true;
+    }
+
+    match /_test/{document=**} {
+      allow read, write: if true; // For testing
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
