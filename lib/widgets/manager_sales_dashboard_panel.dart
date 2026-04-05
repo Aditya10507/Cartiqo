@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../providers/mall_manager_provider.dart';
@@ -717,8 +716,8 @@ class _ManagerSalesDashboardPanelState
 
   DateTime? _readCreatedAt(Map<String, dynamic> payment) {
     final value = payment['createdAt'];
-    if (value is Timestamp) return value.toDate();
     if (value is DateTime) return value;
+    if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
     return null;
   }
 

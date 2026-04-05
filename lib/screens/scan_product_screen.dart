@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../models/cart_item.dart';
+import '../models/mall_product.dart';
 import '../providers/cart_provider.dart';
+import '../services/storefront_api_service.dart';
 import 'cart_screen.dart';
 import 'barcode_scanner_screen.dart';
 import 'product_search_screen.dart';
@@ -17,10 +18,11 @@ class ScanProductScreen extends StatefulWidget {
 }
 
 class _ScanProductScreenState extends State<ScanProductScreen> {
+  final _storefrontApiService = StorefrontApiService();
   final _barcodeCtrl = TextEditingController();
   bool _loading = false;
 
-  Map<String, dynamic>? _product;
+  MallProduct? _product;
   String? _message;
 
   @override
@@ -57,97 +59,19 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
     });
 
     try {
-      final mallId = widget.mallId.trim().toUpperCase();
-
-      // 1) FAST index: malls/{mallId}/barcodes/{barcode}
-      final barcodeDoc = await FirebaseFirestore.instance
-          .collection('malls')
-          .doc(mallId)
-          .collection('barcodes')
-          .doc(barcode)
-          .get();
-
-      if (barcodeDoc.exists) {
-        final data = barcodeDoc.data()!;
-        final productId = (data['productId'] ?? '').toString().trim();
-
-        if (productId.isEmpty) {
-          setState(
-            () => _message = "Barcode mapping exists but productId is missing.",
-          );
-          return;
-        }
-
-        final productDoc = await FirebaseFirestore.instance
-            .collection('malls')
-            .doc(mallId)
-            .collection('products')
-            .doc(productId)
-            .get();
-
-        if (!productDoc.exists) {
-          setState(
-            () => _message = "Product doc not found for productId: $productId",
-          );
-          return;
-        }
-
-        setState(() {
-          _product = productDoc.data();
-          _message = null;
-        });
-        return;
-      }
-
-      // 2) Fallback: query products by barcode field (string)
-      final qs = await FirebaseFirestore.instance
-          .collection('malls')
-          .doc(mallId)
-          .collection('products')
-          .where('barcode', isEqualTo: barcode)
-          .limit(1)
-          .get();
-
-      if (qs.docs.isNotEmpty) {
-        setState(() {
-          _product = qs.docs.first.data();
-          _message = null;
-        });
-        return;
-      }
-
-      // 3) Extra fallback if barcode was stored as NUMBER in Firestore
-      final barcodeAsInt = int.tryParse(barcode);
-      if (barcodeAsInt != null) {
-        final qs2 = await FirebaseFirestore.instance
-            .collection('malls')
-            .doc(mallId)
-            .collection('products')
-            .where('barcode', isEqualTo: barcodeAsInt)
-            .limit(1)
-            .get();
-
-        if (qs2.docs.isNotEmpty) {
-          setState(() {
-            _product = qs2.docs.first.data();
-            _message = null;
-          });
-          return;
-        }
-      }
-
-      setState(() => _message = "Barcode not found in this mall.");
+      final product = await _storefrontApiService.fetchProductByBarcode(
+        mallId: widget.mallId,
+        barcode: barcode,
+      );
+      setState(() {
+        _product = product;
+        _message = null;
+      });
     } catch (e) {
-      setState(() => _message = "Error: $e");
+      setState(() => _message = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       setState(() => _loading = false);
     }
-  }
-
-  int _toInt(dynamic v) {
-    if (v is int) return v;
-    if (v is double) return v.toInt();
-    return int.tryParse(v.toString()) ?? 0;
   }
 
   @override
@@ -577,13 +501,13 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
   }
 
   /// Build modern product card
-  Widget _buildProductCard(Map<String, dynamic> p) {
-    final price = _toInt(p['price']);
-    final unit = (p['unit'] ?? '').toString();
-    final name = (p['name'] ?? '').toString();
-    final brand = (p['brand'] ?? 'Brand').toString();
-    final stock = _toInt(p['stock'] ?? 0);
-    final imageUrl = (p['imageUrl'] ?? '').toString().trim();
+  Widget _buildProductCard(MallProduct p) {
+    final price = p.price.round();
+    final unit = p.unit;
+    final name = p.name;
+    final brand = p.brand;
+    final stock = p.stock;
+    final imageUrl = p.imageUrl.trim();
 
     return Container(
       decoration: BoxDecoration(
@@ -896,14 +820,14 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
   }
 
   /// Add to cart helper
-  void _addToCart(BuildContext context, Map<String, dynamic> p) {
+  void _addToCart(BuildContext context, MallProduct p) {
     final cart = context.read<CartProvider>();
     final item = CartItem(
-      productId: (p['productId'] ?? '').toString(),
-      name: (p['name'] ?? '').toString(),
-      barcode: _barcodeCtrl.text.trim(),
-      price: _toInt(p['price']),
-      unit: (p['unit'] ?? '').toString(),
+      productId: p.productId,
+      name: p.name,
+      barcode: p.barcode,
+      price: p.price.round(),
+      unit: p.unit,
     );
     cart.addOrIncrement(item);
 

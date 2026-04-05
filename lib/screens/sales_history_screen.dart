@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -416,8 +415,8 @@ class _SalesHistoryScreenState extends State<SalesHistoryScreen> {
 
   DateTime? _createdAt(Map<String, dynamic> payment) {
     final value = payment['createdAt'];
-    if (value is Timestamp) return value.toDate();
     if (value is DateTime) return value;
+    if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
     return null;
   }
 

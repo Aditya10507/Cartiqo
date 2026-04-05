@@ -1,13 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import 'dart:io';
-
 import '../providers/user_auth_provider.dart';
 import '../services/history_print_service.dart';
+import '../services/user_profile_api_service.dart';
 
 class UserProfileScreen extends StatelessWidget {
   const UserProfileScreen({super.key});
@@ -23,7 +23,7 @@ class UserProfileScreen extends StatelessWidget {
       );
     }
 
-    final userDoc = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final api = UserProfileApiService();
 
     return DefaultTabController(
       length: 3,
@@ -49,10 +49,10 @@ class UserProfileScreen extends StatelessWidget {
               colors: [Color(0xFFF4EFFD), Color(0xFFF9F7FF), Color(0xFFFFFFFF)],
             ),
           ),
-          child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: userDoc.snapshots(),
+          child: FutureBuilder<Map<String, dynamic>>(
+            future: api.fetchProfile(user.uid),
             builder: (context, snapshot) {
-              final data = snapshot.data?.data() ?? <String, dynamic>{};
+              final data = snapshot.data ?? <String, dynamic>{};
               final fullName =
                   (data['fullName'] ?? user.displayName ?? 'Cartiqo User')
                       .toString();
@@ -382,19 +382,17 @@ class _BillsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('bills')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: UserProfileApiService().fetchBills(userId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        if (snapshot.hasError) {
+          return Center(child: Text('Unable to load bills: ${snapshot.error}'));
+        }
 
-        final docs = snapshot.data?.docs ?? [];
+        final docs = snapshot.data ?? [];
         if (docs.isEmpty) {
           return const Center(child: Text('No previous bills yet'));
         }
@@ -404,10 +402,11 @@ class _BillsTab extends StatelessWidget {
           itemCount: docs.length,
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
-            final bill = docs[index].data();
+            final bill = docs[index];
             final items = (bill['items'] as List<dynamic>? ?? []);
             final subtotal = (bill['subtotal'] ?? 0).toString();
-            final extraCharge = (bill['extraCharge'] ?? bill['handlingFee'] ?? 0).toString();
+            final extraCharge = (bill['extraCharge'] ?? bill['handlingFee'] ?? 0)
+                .toString();
             final extraChargeLabel =
                 (bill['extraChargeLabel'] ?? 'Extra Charges').toString();
             final gst = (bill['gst'] ?? 0).toString();
@@ -487,19 +486,19 @@ class _PaymentsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('payments')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: UserProfileApiService().fetchPayments(userId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Unable to load payments: ${snapshot.error}'),
+          );
+        }
 
-        final docs = snapshot.data?.docs ?? [];
+        final docs = snapshot.data ?? [];
         if (docs.isEmpty) {
           return const Center(child: Text('No payment history yet'));
         }
@@ -509,7 +508,7 @@ class _PaymentsTab extends StatelessWidget {
           itemCount: docs.length,
           separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
-            final payment = docs[index].data();
+            final payment = docs[index];
             return Card(
               child: Padding(
                 padding: const EdgeInsets.all(14),
@@ -645,7 +644,6 @@ class _StatusChip extends StatelessWidget {
         color: Colors.white,
         fontWeight: FontWeight.w700,
       ),
-      // Darker pill for readability on the bright gradient header.
       backgroundColor: const Color(0xFF0B1220).withValues(alpha: 0.28),
       side: BorderSide(color: Colors.white.withValues(alpha: 0.20)),
     );

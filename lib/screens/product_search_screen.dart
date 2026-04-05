@@ -1,10 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/cart_item.dart';
 import '../models/mall_product.dart';
 import '../providers/cart_provider.dart';
+import '../services/storefront_api_service.dart';
 
 class ProductSearchScreen extends StatefulWidget {
   final String mallId;
@@ -16,6 +16,7 @@ class ProductSearchScreen extends StatefulWidget {
 }
 
 class _ProductSearchScreenState extends State<ProductSearchScreen> {
+  final _storefrontApiService = StorefrontApiService();
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   String _selectedCategory = 'All';
@@ -30,27 +31,27 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final productsStream = FirebaseFirestore.instance
-        .collection('malls')
-        .doc(widget.mallId)
-        .collection('products')
-        .snapshots();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Search Products'),
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: productsStream,
+      body: FutureBuilder<List<MallProduct>>(
+        future: _storefrontApiService.fetchProducts(widget.mallId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final products = snapshot.data?.docs
-                  .map((doc) => MallProduct.fromMap(doc.data()))
-                  .toList() ??
-              <MallProduct>[];
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('Unable to load products: ${snapshot.error}'),
+              ),
+            );
+          }
+
+          final products = snapshot.data ?? <MallProduct>[];
 
           final categories = <String>{
             'All',

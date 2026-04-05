@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 import 'app/app.dart';
 
 Future<void> main() async {
@@ -12,7 +10,6 @@ Future<void> main() async {
   };
 
   try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
     runApp(const SwiftCartApp());
   } catch (error, stackTrace) {
     debugPrintStack(stackTrace: stackTrace);

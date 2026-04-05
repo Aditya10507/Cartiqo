@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class MallSubscription {
   final String mallId;
   final String name; // Mall name (matches your 'name' field)
@@ -73,8 +71,10 @@ class MallSubscription {
     DateTime parseDateTime(dynamic value) {
       if (value == null) return DateTime.now();
       if (value is DateTime) return value;
-      if (value is Timestamp) return value.toDate();
       if (value is String) return DateTime.parse(value);
+      if (value.runtimeType.toString() == 'Timestamp') {
+        return (value as dynamic).toDate() as DateTime;
+      }
       return DateTime.now();
     }
 

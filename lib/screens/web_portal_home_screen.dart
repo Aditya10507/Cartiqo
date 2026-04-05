@@ -1,6 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../services/admin_api_service.dart';
 import '../widgets/swiftcart_logo.dart';
 import 'admin_login_screen.dart';
 import 'mall_manager_login_screen.dart';
@@ -1223,6 +1223,7 @@ class _SupportRequestDialog extends StatefulWidget {
 }
 
 class _SupportRequestDialogState extends State<_SupportRequestDialog> {
+  final _adminApiService = AdminApiService();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _messageController = TextEditingController();
@@ -1293,14 +1294,21 @@ class _SupportRequestDialogState extends State<_SupportRequestDialog> {
       return;
     }
     setState(() => _saving = true);
-    await FirebaseFirestore.instance.collection('support_requests').add({
-      'type': widget.type,
-      'name': _nameController.text.trim(),
-      'email': _emailController.text.trim(),
-      'message': _messageController.text.trim(),
-      'status': 'new',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      await _adminApiService.createSupportRequest(
+        type: widget.type,
+        name: _nameController.text,
+        email: _emailController.text,
+        message: _messageController.text,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to submit request: $error')),
+      );
+      return;
+    }
     if (!mounted) return;
     setState(() => _saving = false);
     Navigator.pop(context);

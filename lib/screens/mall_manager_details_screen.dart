@@ -1,7 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/mall_manager_account.dart';
 import '../providers/admin_provider.dart';
 
 class MallManagerDetailsScreen extends StatelessWidget {
@@ -16,16 +16,10 @@ class MallManagerDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ref = FirebaseFirestore.instance
-        .collection('malls')
-        .doc(mallId)
-        .collection('managers')
-        .doc(managerId);
-
     return Scaffold(
-      appBar: AppBar(title: Text('Manager • $managerId'), elevation: 0),
-      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: ref.snapshots(),
+      appBar: AppBar(title: Text('Manager - $managerId'), elevation: 0),
+      body: StreamBuilder<List<MallManagerAccount>>(
+        stream: context.read<AdminProvider>().watchMallManagers(mallId),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
@@ -34,23 +28,19 @@ class MallManagerDetailsScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final doc = snapshot.data!;
-          if (!doc.exists) {
+          final manager = snapshot.data!
+              .where((item) => item.managerId == managerId)
+              .cast<MallManagerAccount?>()
+              .firstOrNull;
+          if (manager == null) {
             return const Center(child: Text('Manager not found'));
           }
 
-          final data = doc.data() ?? {};
-          final assignedEmail = (data['assignedEmail'] ?? '').toString();
-          final fullName = (data['fullName'] ?? '').toString();
-          final phoneNumber = (data['phoneNumber'] ?? '').toString();
-          final isActive = data['isActive'] == null
-              ? true
-              : data['isActive'] == true;
-          final doj = data['dateOfJoining'];
-          DateTime? joiningDate;
-          if (doj is Timestamp) {
-            joiningDate = doj.toDate();
-          }
+          final assignedEmail = (manager.assignedEmail ?? '').toString();
+          final fullName = manager.fullName;
+          final phoneNumber = manager.phoneNumber;
+          final isActive = manager.isActive;
+          final joiningDate = manager.dateOfJoining;
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -226,6 +216,10 @@ class MallManagerDetailsScreen extends StatelessWidget {
     final dd = date.day.toString().padLeft(2, '0');
     return '${date.year}-$mm-$dd';
   }
+}
+
+extension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }
 
 class _InfoRow extends StatelessWidget {

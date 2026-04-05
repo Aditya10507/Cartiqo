@@ -32,6 +32,8 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+**/bin/
+**/obj/
 
 # Node / tooling (regeneratable)
 node_modules/
@@ -42,6 +44,11 @@ tools/node_modules/
 .firebase/
 functions/.env
 tools/serviceAccountKey.json
+backend/SwiftCart.Api/appsettings.Development.json
+tools/azure_deploy_runtime.env
+tools/azure_jwt_secret.txt
+tools/*.sql
+tools/webapp-healthcheck.json
 
 # Gradle cache
 android/.gradle/

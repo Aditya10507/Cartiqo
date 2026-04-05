@@ -1,20 +1,18 @@
-// ignore_for_file: avoid_print
-
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:crypto/crypto.dart';
-import 'dart:convert';
+
 import '../models/admin.dart';
 import '../models/mall_manager_account.dart';
 import '../models/mall_subscription.dart';
+import '../services/admin_api_service.dart';
 
 class AdminProvider extends ChangeNotifier {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final AdminApiService _adminApiService = AdminApiService();
 
   Admin? _currentAdmin;
   List<MallSubscription> _malls = [];
   bool _isLoading = false;
   String? _error;
+  String? _accessToken;
 
   Admin? get currentAdmin => _currentAdmin;
   List<MallSubscription> get malls => _malls;
@@ -22,16 +20,7 @@ class AdminProvider extends ChangeNotifier {
   String? get error => _error;
 
   Stream<List<Map<String, dynamic>>> watchAnnouncements() {
-    return _firestore
-        .collection('announcements')
-        .orderBy('createdAt', descending: true)
-        .limit(10)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => {'id': doc.id, ...doc.data()})
-              .toList(),
-        );
+    return _pollingStream(_adminApiService.fetchAnnouncements);
   }
 
   Future<bool> createAnnouncement({
@@ -39,14 +28,17 @@ class AdminProvider extends ChangeNotifier {
     required String message,
     String audience = 'all',
   }) async {
+    _error = null;
+    notifyListeners();
+
     try {
-      await _firestore.collection('announcements').add({
-        'title': title.trim(),
-        'message': message.trim(),
-        'audience': audience,
-        'createdBy': _currentAdmin?.email ?? _currentAdmin?.name ?? 'admin',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      await _adminApiService.createAnnouncement(
+        token: _requireAccessToken(),
+        title: title,
+        message: message,
+        audience: audience,
+        createdBy: _currentAdmin?.email ?? _currentAdmin?.name ?? 'admin',
+      );
       return true;
     } catch (e) {
       _error = 'Error creating announcement: $e';
@@ -56,27 +48,24 @@ class AdminProvider extends ChangeNotifier {
   }
 
   Stream<List<Map<String, dynamic>>> watchSupportRequests() {
-    return _firestore
-        .collection('support_requests')
-        .orderBy('createdAt', descending: true)
-        .limit(20)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => {'id': doc.id, ...doc.data()})
-              .toList(),
-        );
+    return _pollingStream(
+      () => _adminApiService.fetchSupportRequests(_requireAccessToken()),
+    );
   }
 
   Future<bool> updateSupportRequestStatus({
     required String requestId,
     required String status,
   }) async {
+    _error = null;
+    notifyListeners();
+
     try {
-      await _firestore.collection('support_requests').doc(requestId).set({
-        'status': status,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await _adminApiService.updateSupportRequestStatus(
+        token: _requireAccessToken(),
+        requestId: requestId,
+        status: status,
+      );
       return true;
     } catch (e) {
       _error = 'Error updating support request: $e';
@@ -86,33 +75,17 @@ class AdminProvider extends ChangeNotifier {
   }
 
   Stream<List<Map<String, dynamic>>> watchRecentMallPayments() {
-    return _firestore
-        .collectionGroup('payments')
-        .orderBy('createdAt', descending: true)
-        .limit(20)
-        .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .where((doc) => doc.reference.parent.parent?.parent.id == 'malls')
-              .map((doc) => {'id': doc.id, ...doc.data()})
-              .toList(),
-        );
+    return _pollingStream(
+      () => _adminApiService.fetchRecentPayments(_requireAccessToken()),
+    );
   }
 
   Future<int> getMallManagerCount(String mallId) async {
     try {
-      final query = _firestore
-          .collection('malls')
-          .doc(mallId)
-          .collection('managers');
-
-      try {
-        final aggregate = await query.count().get();
-        return aggregate.count ?? 0;
-      } catch (_) {
-        final snapshot = await query.get();
-        return snapshot.size;
-      }
+      return await _adminApiService.fetchMallManagerCount(
+        token: _requireAccessToken(),
+        mallId: mallId,
+      );
     } catch (_) {
       return 0;
     }
@@ -129,22 +102,18 @@ class AdminProvider extends ChangeNotifier {
   }
 
   Stream<List<MallManagerAccount>> watchMallManagers(String mallId) {
-    return _firestore
-        .collection('malls')
-        .doc(mallId)
-        .collection('managers')
-        .orderBy('managerId')
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            final data = doc.data();
-            final merged = <String, dynamic>{
-              ...data,
-              'managerId': data['managerId'] ?? doc.id,
-            };
-            return MallManagerAccount.fromMap(mallId, merged);
-          }).toList();
-        });
+    return _pollingStream(
+      () async => (await _adminApiService.fetchMallManagers(
+            token: _requireAccessToken(),
+            mallId: mallId,
+          ))
+          .map((manager) => manager.toMap())
+          .toList(),
+    ).map(
+      (items) => items
+          .map((item) => MallManagerAccount.fromMap(mallId, item))
+          .toList(),
+    );
   }
 
   Future<bool> createMallManager({
@@ -156,84 +125,12 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final normalizedMallId = mallId.trim().toUpperCase();
-      final normalizedManagerId = managerId.trim().toUpperCase();
-      final trimmedPassword = password.trim();
-
-      if (normalizedMallId.isEmpty ||
-          normalizedManagerId.isEmpty ||
-          trimmedPassword.isEmpty) {
-        _error = 'Please enter mall ID, manager ID, and password';
-        notifyListeners();
-        return false;
-      }
-
-      if (trimmedPassword.length < 6) {
-        _error = 'Password must be at least 6 characters';
-        notifyListeners();
-        return false;
-      }
-
-      final mallDoc = await _firestore
-          .collection('malls')
-          .doc(normalizedMallId)
-          .get();
-      if (!mallDoc.exists) {
-        _error = 'Mall not found';
-        notifyListeners();
-        return false;
-      }
-
-      final managerIndexRef = _firestore
-          .collection('manager_index')
-          .doc(normalizedManagerId);
-      final existingIndex = await managerIndexRef.get();
-      if (existingIndex.exists) {
-        final existingMall = (existingIndex.data()?['mallId'] ?? '')
-            .toString()
-            .trim();
-        _error = existingMall.isEmpty
-            ? 'Manager ID already exists'
-            : 'Manager ID already exists in mall $existingMall';
-        notifyListeners();
-        return false;
-      }
-
-      final managerRef = _firestore
-          .collection('malls')
-          .doc(normalizedMallId)
-          .collection('managers')
-          .doc(normalizedManagerId);
-
-      final existing = await managerRef.get();
-      if (existing.exists) {
-        _error = 'Manager ID already exists';
-        notifyListeners();
-        return false;
-      }
-
-      await managerRef.set({
-        'mallId': normalizedMallId,
-        'managerId': normalizedManagerId,
-        'isActive': true,
-        'assignedUid': null,
-        'assignedEmail': null,
-        'passwordHash': sha256.convert(utf8.encode(trimmedPassword)).toString(),
-        'passwordUpdatedAt': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      await managerIndexRef.set({
-        'mallId': normalizedMallId,
-        'managerId': normalizedManagerId,
-        'isActive': true,
-        'passwordHash': sha256.convert(utf8.encode(trimmedPassword)).toString(),
-        'passwordUpdatedAt': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
+      await _adminApiService.createMallManager(
+        token: _requireAccessToken(),
+        mallId: mallId,
+        managerId: managerId,
+        password: password,
+      );
       return true;
     } catch (e) {
       _error = 'Error creating manager: $e';
@@ -251,41 +148,12 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final normalizedMallId = mallId.trim().toUpperCase();
-      final normalizedManagerId = managerId.trim().toUpperCase();
-      final trimmedPassword = newPassword.trim();
-
-      if (trimmedPassword.length < 6) {
-        _error = 'Password must be at least 6 characters';
-        notifyListeners();
-        return false;
-      }
-
-      await _firestore
-          .collection('malls')
-          .doc(normalizedMallId)
-          .collection('managers')
-          .doc(normalizedManagerId)
-          .set({
-            'passwordHash': sha256
-                .convert(utf8.encode(trimmedPassword))
-                .toString(),
-            'passwordUpdatedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-
-      await _firestore
-          .collection('manager_index')
-          .doc(normalizedManagerId)
-          .set({
-            'mallId': normalizedMallId,
-            'managerId': normalizedManagerId,
-            'passwordHash': sha256
-                .convert(utf8.encode(trimmedPassword))
-                .toString(),
-            'passwordUpdatedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+      await _adminApiService.resetMallManagerPassword(
+        token: _requireAccessToken(),
+        mallId: mallId,
+        managerId: managerId,
+        newPassword: newPassword,
+      );
       return true;
     } catch (e) {
       _error = 'Error resetting password: $e';
@@ -302,21 +170,11 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final normalizedMallId = mallId.trim().toUpperCase();
-      final normalizedManagerId = managerId.trim().toUpperCase();
-
-      await _firestore
-          .collection('malls')
-          .doc(normalizedMallId)
-          .collection('managers')
-          .doc(normalizedManagerId)
-          .set({
-            'assignedUid': FieldValue.delete(),
-            'assignedEmail': FieldValue.delete(),
-            'linkedAt': FieldValue.delete(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-
+      await _adminApiService.unlinkMallManager(
+        token: _requireAccessToken(),
+        mallId: mallId,
+        managerId: managerId,
+      );
       return true;
     } catch (e) {
       _error = 'Error unlinking manager: $e';
@@ -334,27 +192,12 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final normalizedMallId = mallId.trim().toUpperCase();
-      final normalizedManagerId = managerId.trim().toUpperCase();
-      await _firestore
-          .collection('malls')
-          .doc(normalizedMallId)
-          .collection('managers')
-          .doc(normalizedManagerId)
-          .set({
-            'isActive': isActive,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-
-      await _firestore
-          .collection('manager_index')
-          .doc(normalizedManagerId)
-          .set({
-            'mallId': normalizedMallId,
-            'managerId': normalizedManagerId,
-            'isActive': isActive,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+      await _adminApiService.setMallManagerActive(
+        token: _requireAccessToken(),
+        mallId: mallId,
+        managerId: managerId,
+        isActive: isActive,
+      );
       return true;
     } catch (e) {
       _error = 'Error updating manager: $e';
@@ -369,49 +212,19 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      print('=== ADMIN LOGIN ===');
-      print('Email: $email');
-
-      // Hash password
-      final hashedPassword = sha256.convert(utf8.encode(password)).toString();
-
-      // Query by email field
-      final query = await _firestore
-          .collection('admins')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-
-      if (query.docs.isEmpty) {
-        _error = 'Admin not found';
-        _isLoading = false;
-        print('ERROR: Admin not found');
-        notifyListeners();
-        return false;
-      }
-
-      final data = query.docs.first.data();
-      if (data['passwordHash'] != hashedPassword) {
-        _error = 'Invalid credentials';
-        _isLoading = false;
-        print('ERROR: Invalid password hash');
-        notifyListeners();
-        return false;
-      }
-
-      _currentAdmin = Admin.fromMap(data);
-      print('✓ Admin authenticated: ${_currentAdmin?.name}');
-
-      print('Fetching malls...');
+      final result = await _adminApiService.login(
+        email: email,
+        password: password,
+      );
+      _currentAdmin = result.admin;
+      _accessToken = result.token;
       await _fetchMalls();
 
       _isLoading = false;
-      print('✓ Login successful, malls count: ${_malls.length}');
       notifyListeners();
       return true;
     } catch (e) {
       _error = 'Login error: $e';
-      print('ERROR during login: $e');
       _isLoading = false;
       notifyListeners();
       return false;
@@ -424,14 +237,8 @@ class AdminProvider extends ChangeNotifier {
     required String mallCode,
     required String estYear,
   }) {
-    // Format: AREACODE(6) + MALLNUMBER(2) + MALLCODE(2) + YEAR(2)
-    // Ensure year is 2 digits
-    String yearCode = estYear.length == 4 ? estYear.substring(2) : estYear;
-
-    // Construct mall ID: 6 digits + 2 digits + 2 letters + 2 digits
-    String mallId = '$areaCode$mallNumber${mallCode.toUpperCase()}$yearCode';
-
-    return mallId;
+    final yearCode = estYear.length == 4 ? estYear.substring(2) : estYear;
+    return '$areaCode$mallNumber${mallCode.toUpperCase()}$yearCode';
   }
 
   Future<String?> generateNewMallId({
@@ -441,19 +248,26 @@ class AdminProvider extends ChangeNotifier {
     required String estYear,
   }) async {
     try {
-      String mallId;
-      bool exists = true;
+      if (_malls.isEmpty && _accessToken != null) {
+        await _fetchMalls();
+      }
 
-      do {
-        mallId = _generateUniqueMallId(
-          areaCode: areaCode,
-          mallNumber: mallNumber,
-          mallCode: mallCode,
-          estYear: estYear,
-        );
-        final doc = await _firestore.collection('malls').doc(mallId).get();
-        exists = doc.exists;
-      } while (exists);
+      final mallId = _generateUniqueMallId(
+        areaCode: areaCode,
+        mallNumber: mallNumber,
+        mallCode: mallCode,
+        estYear: estYear,
+      );
+
+      final exists = _malls.any(
+        (mall) => mall.mallId.trim().toUpperCase() == mallId,
+      );
+
+      if (exists) {
+        _error = 'Mall ID already exists. Change the inputs and try again.';
+        notifyListeners();
+        return null;
+      }
 
       return mallId;
     } catch (e) {
@@ -469,74 +283,17 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      print('=== ADDING NEW MALL ===');
-      print('Mall ID: ${mall.mallId}');
-      print('Mall Name: ${mall.name}');
-      print('Subscription Start: ${mall.subscriptionStartDate}');
-      print('Subscription End: ${mall.subscriptionEndDate}');
-
-      // Update or create the mall document with subscription fields
-      final mallData = {
-        'mallId': mall.mallId,
-        'name': mall.name,
-        'ownerName': mall.ownerName,
-        'ownerEmail': mall.ownerEmail,
-        'city': mall.city,
-        'state': mall.state,
-        'subscriptionStartDate': mall.subscriptionStartDate,
-        'subscriptionEndDate': mall.subscriptionEndDate,
-        'planType': mall.planType,
-        'maxProducts': mall.maxProducts,
-        'isActive': mall.isActive,
-        // Preserve existing fields if they exist
-        if (mall.areaCode != null) 'areaCode': mall.areaCode,
-        if (mall.estYear != null) 'estYear': mall.estYear,
-        if (mall.mallCode != null) 'mallCode': mall.mallCode,
-        if (mall.mallNumber != null) 'mallNumber': mall.mallNumber,
-        if (mall.active != null) 'active': mall.active,
-      };
-
-      print('Saving mall data to Firestore...');
-
-      // Update malls collection
-      await _firestore
-          .collection('malls')
-          .doc(mall.mallId)
-          .set(
-            mallData,
-            SetOptions(merge: true), // Merge with existing data
-          );
-
-      print('✓ Saved to malls collection');
-
-      // Also save to mall_subscriptions for quick access
-      await _firestore
-          .collection('mall_subscriptions')
-          .doc(mall.mallId)
-          .set(mall.toMap());
-
-      print('✓ Saved to mall_subscriptions collection');
-
-      // Verify the mall was saved by fetching it back
-      final savedDoc = await _firestore
-          .collection('malls')
-          .doc(mall.mallId)
-          .get();
-      if (!savedDoc.exists) {
-        throw Exception('Mall was not saved to Firestore');
-      }
-      print('✓ Verified mall exists in Firestore');
-
-      // Refresh the local list from Firestore to ensure consistency
-      await _fetchMalls();
+      final createdMall = await _adminApiService.createMall(
+        token: _requireAccessToken(),
+        mall: mall,
+      );
+      _malls = [..._malls, createdMall];
 
       _isLoading = false;
-      _error = null;
       notifyListeners();
       return true;
     } catch (e) {
       _error = 'Error adding mall: $e';
-      print('ERROR adding mall: $e');
       _isLoading = false;
       notifyListeners();
       return false;
@@ -549,31 +306,14 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Update malls collection
-      final updateData = {
-        'name': mall.name,
-        'ownerName': mall.ownerName,
-        'ownerEmail': mall.ownerEmail,
-        'city': mall.city,
-        'state': mall.state,
-        'subscriptionStartDate': mall.subscriptionStartDate,
-        'subscriptionEndDate': mall.subscriptionEndDate,
-        'planType': mall.planType,
-        'maxProducts': mall.maxProducts,
-        'isActive': mall.isActive,
-      };
-
-      await _firestore.collection('malls').doc(mall.mallId).update(updateData);
-
-      // Also update mall_subscriptions
-      await _firestore
-          .collection('mall_subscriptions')
-          .doc(mall.mallId)
-          .set(mall.toMap(), SetOptions(merge: true));
+      final updatedMall = await _adminApiService.updateMall(
+        token: _requireAccessToken(),
+        mall: mall,
+      );
 
       final index = _malls.indexWhere((m) => m.mallId == mall.mallId);
       if (index != -1) {
-        _malls[index] = mall;
+        _malls[index] = updatedMall;
       }
 
       _isLoading = false;
@@ -593,14 +333,10 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Update both collections
-      await _firestore.collection('malls').doc(mallId).update({
-        'isActive': false,
-      });
-
-      await _firestore.collection('mall_subscriptions').doc(mallId).update({
-        'isActive': false,
-      });
+      await _adminApiService.deactivateMall(
+        token: _requireAccessToken(),
+        mallId: mallId,
+      );
 
       final index = _malls.indexWhere((m) => m.mallId == mallId);
       if (index != -1) {
@@ -639,38 +375,11 @@ class AdminProvider extends ChangeNotifier {
 
   Future<void> _fetchMalls() async {
     try {
-      // Fetch all malls from the malls collection (your main collection)
-      final mallsSnapshot = await _firestore.collection('malls').get();
-
-      print('=== FETCHING MALLS ===');
-      print('Found ${mallsSnapshot.docs.length} malls in Firestore');
-
-      final mallsList = <MallSubscription>[];
-
-      for (final doc in mallsSnapshot.docs) {
-        final mallData = doc.data();
-
-        print('Processing mall: ${doc.id}, data: $mallData');
-
-        try {
-          // Directly create MallSubscription from the data
-          // The fromMap method now handles Timestamp conversion properly
-          final mall = MallSubscription.fromMap(mallData);
-          mallsList.add(mall);
-          print('✓ Successfully parsed mall: ${mall.name}');
-        } catch (parseError) {
-          print('ERROR parsing mall ${doc.id}: $parseError');
-          // Skip malformed malls but continue processing others
-        }
-      }
-
-      _malls = mallsList;
+      _malls = await _adminApiService.fetchMalls(_requireAccessToken());
       _error = null;
-      print('✓ Successfully loaded ${mallsList.length} malls');
       notifyListeners();
     } catch (e) {
       _error = 'Error fetching malls: $e';
-      print('ERROR fetching malls: $e');
       notifyListeners();
     }
   }
@@ -678,6 +387,7 @@ class AdminProvider extends ChangeNotifier {
   void logout() {
     _currentAdmin = null;
     _malls = [];
+    _accessToken = null;
     _error = null;
     notifyListeners();
   }
@@ -689,5 +399,23 @@ class AdminProvider extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  String _requireAccessToken() {
+    final token = _accessToken;
+    if (token == null || token.isEmpty) {
+      throw Exception('Admin session expired. Please login again.');
+    }
+    return token;
+  }
+
+  Stream<List<Map<String, dynamic>>> _pollingStream(
+    Future<List<Map<String, dynamic>>> Function() loader, {
+    Duration interval = const Duration(seconds: 15),
+  }) async* {
+    while (true) {
+      yield await loader();
+      await Future<void>.delayed(interval);
+    }
   }
 }

@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class MallManagerProfile {
   final String mallId;
   final String managerId;
@@ -35,12 +33,12 @@ class MallManagerProfile {
 
   static DateTime? _readDate(dynamic value) {
     if (value == null) return null;
-    if (value is Timestamp) return value.toDate();
     if (value is DateTime) return value;
+    if (value is String && value.isNotEmpty) return DateTime.tryParse(value);
     return null;
   }
 
-  factory MallManagerProfile.fromManagerDoc({
+  factory MallManagerProfile.fromMap({
     required String mallId,
     required String managerId,
     required Map<String, dynamic> data,
@@ -54,16 +52,4 @@ class MallManagerProfile {
       dateOfJoining: _readDate(data['dateOfJoining']),
     );
   }
-
-  Map<String, dynamic> toUpdateMap() {
-    return {
-      'fullName': fullName,
-      'phoneNumber': phoneNumber,
-      'dateOfJoining': dateOfJoining == null
-          ? FieldValue.delete()
-          : Timestamp.fromDate(dateOfJoining!),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-  }
 }
-

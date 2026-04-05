@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/cart_provider.dart';
 import '../providers/user_auth_provider.dart';
+import '../services/storefront_api_service.dart';
 import '../app/app.dart';
 import '../widgets/swiftcart_logo.dart';
 import 'scan_product_screen.dart';
@@ -18,6 +18,7 @@ class MallSelectScreen extends StatefulWidget {
 }
 
 class _MallSelectScreenState extends State<MallSelectScreen> {
+  final _storefrontApiService = StorefrontApiService();
   final _controller = TextEditingController();
   String? _error;
   bool _checking = false;
@@ -48,15 +49,7 @@ class _MallSelectScreenState extends State<MallSelectScreen> {
     });
 
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('malls')
-          .doc(mallId)
-          .get();
-
-      if (!doc.exists) {
-        setState(() => _error = "Mall not found. Please check Mall ID.");
-        return;
-      }
+      await _storefrontApiService.fetchBillingSettings(mallId);
 
       if (!mounted) return;
       Navigator.push(
@@ -64,7 +57,9 @@ class _MallSelectScreenState extends State<MallSelectScreen> {
         MaterialPageRoute(builder: (_) => ScanProductScreen(mallId: mallId)),
       );
     } catch (e) {
-      setState(() => _error = "Error: $e");
+      setState(
+        () => _error = e.toString().replaceFirst('Exception: ', ''),
+      );
     } finally {
       if (mounted) setState(() => _checking = false);
     }

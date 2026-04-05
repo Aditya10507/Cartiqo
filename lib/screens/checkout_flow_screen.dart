@@ -1,6 +1,5 @@
 import 'dart:math';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,9 +7,12 @@ import '../models/cart_item.dart';
 import '../models/mall_billing_settings.dart';
 import '../providers/cart_provider.dart';
 import '../providers/user_auth_provider.dart';
+import '../services/storefront_api_service.dart';
 
 class CheckoutReviewScreen extends StatelessWidget {
   final String mallId;
+  static final StorefrontApiService _storefrontApiService =
+      StorefrontApiService();
 
   const CheckoutReviewScreen({super.key, required this.mallId});
 
@@ -20,13 +22,30 @@ class CheckoutReviewScreen extends StatelessWidget {
     final items = cart.items;
     final subtotal = cart.total;
 
-    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      future: FirebaseFirestore.instance.collection('malls').doc(mallId).get(),
+    return FutureBuilder<MallBillingSettings>(
+      future: _storefrontApiService.fetchBillingSettings(mallId),
       builder: (context, snapshot) {
-        final mallData = snapshot.data?.data();
-        final billingSettings = MallBillingSettings.fromMap(
-          mallData?['billingSettings'] as Map<String, dynamic>?,
-        );
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Review Bill')),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Unable to load billing settings: ${snapshot.error}',
+                ),
+              ),
+            ),
+          );
+        }
+
+        final billingSettings = snapshot.data ?? const MallBillingSettings();
         final extraCharge = items.isEmpty
             ? 0
             : billingSettings.extraChargeAmount.round();

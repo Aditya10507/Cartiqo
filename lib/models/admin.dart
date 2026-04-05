@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class Admin {
   final String adminId;
   final String email;
@@ -28,12 +26,12 @@ class Admin {
   factory Admin.fromMap(Map<String, dynamic> map) {
     DateTime parseCreatedAt() {
       final value = map['createdAt'];
-      if (value is Timestamp) {
-        return value.toDate();
-      } else if (value is DateTime) {
+      if (value is DateTime) {
         return value;
       } else if (value is String) {
         return DateTime.parse(value);
+      } else if (value != null && value.runtimeType.toString() == 'Timestamp') {
+        return (value as dynamic).toDate() as DateTime;
       }
       return DateTime.now();
     }
