@@ -119,7 +119,6 @@ class AdminProvider extends ChangeNotifier {
   Future<bool> createMallManager({
     required String mallId,
     required String managerId,
-    required String password,
   }) async {
     _error = null;
     notifyListeners();
@@ -129,34 +128,10 @@ class AdminProvider extends ChangeNotifier {
         token: _requireAccessToken(),
         mallId: mallId,
         managerId: managerId,
-        password: password,
       );
       return true;
     } catch (e) {
       _error = 'Error creating manager: $e';
-      notifyListeners();
-      return false;
-    }
-  }
-
-  Future<bool> resetMallManagerPassword({
-    required String mallId,
-    required String managerId,
-    required String newPassword,
-  }) async {
-    _error = null;
-    notifyListeners();
-
-    try {
-      await _adminApiService.resetMallManagerPassword(
-        token: _requireAccessToken(),
-        mallId: mallId,
-        managerId: managerId,
-        newPassword: newPassword,
-      );
-      return true;
-    } catch (e) {
-      _error = 'Error resetting password: $e';
       notifyListeners();
       return false;
     }

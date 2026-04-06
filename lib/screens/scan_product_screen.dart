@@ -508,6 +508,7 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
     final brand = p.brand;
     final stock = p.stock;
     final imageUrl = p.imageUrl.trim();
+    final cartQty = context.watch<CartProvider>().quantityFor(p.barcode);
 
     return Container(
       decoration: BoxDecoration(
@@ -645,54 +646,122 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Add to Cart Button
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.greenAccent.withOpacity(0.9),
-                  Colors.cyan.withOpacity(0.7),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.greenAccent.withOpacity(0.4),
-                  blurRadius: 16,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _addToCart(context, p),
-                borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 14,
-                    horizontal: 16,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final useVerticalLayout = constraints.maxWidth < 560;
+              final addButton = Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.greenAccent.withOpacity(0.9),
+                      Colors.cyan.withOpacity(0.7),
+                    ],
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.shopping_cart, color: Colors.white),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'Add to Cart',
-                        style: TextStyle(
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.greenAccent.withOpacity(0.4),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _addToCart(context, p),
+                    borderRadius: BorderRadius.circular(12),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 16,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.shopping_cart, color: Colors.white),
+                          SizedBox(width: 12),
+                          Text(
+                            'Add to Cart',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+
+              final quantityControl = Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.grey[900]?.withOpacity(0.55),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.08),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      onPressed: cartQty > 0
+                          ? () => context.read<CartProvider>().decrement(p.barcode)
+                          : null,
+                      icon: const Icon(
+                        Icons.remove_circle_outline,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(
+                      width: 28,
+                      child: Text(
+                        '$cartQty',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                           fontSize: 16,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    IconButton(
+                      onPressed: () => _addToCart(context, p, showMessage: false),
+                      icon: const Icon(
+                        Icons.add_circle_outline,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ),
+              );
+
+              if (useVerticalLayout) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    addButton,
+                    const SizedBox(height: 12),
+                    quantityControl,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: addButton),
+                  const SizedBox(width: 12),
+                  quantityControl,
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -820,7 +889,7 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
   }
 
   /// Add to cart helper
-  void _addToCart(BuildContext context, MallProduct p) {
+  void _addToCart(BuildContext context, MallProduct p, {bool showMessage = true}) {
     final cart = context.read<CartProvider>();
     final item = CartItem(
       productId: p.productId,
@@ -828,29 +897,32 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
       barcode: p.barcode,
       price: p.price.round(),
       unit: p.unit,
+      imageUrl: p.imageUrl,
     );
     cart.addOrIncrement(item);
 
-    // Show success feedback
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(child: Text('${item.name} added to cart')),
-          ],
+    if (showMessage) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text('${item.name} added to cart')),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
         ),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
-      ),
-    );
+      );
+    }
 
-    // Optional: Clear input for next scan
-    _barcodeCtrl.clear();
-    setState(() {
-      _product = null;
-      _message = null;
-    });
+    if (showMessage) {
+      _barcodeCtrl.clear();
+      setState(() {
+        _product = null;
+        _message = null;
+      });
+    }
   }
 }

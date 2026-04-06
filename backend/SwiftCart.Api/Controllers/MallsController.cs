@@ -9,10 +9,11 @@ namespace SwiftCart.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "admin,super_admin")]
+[Authorize]
 public sealed class MallsController(SwiftCartDbContext dbContext) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Roles = "admin,super_admin")]
     public async Task<ActionResult<List<MallDto>>> GetAll()
     {
         var malls = await dbContext.Malls
@@ -46,6 +47,7 @@ public sealed class MallsController(SwiftCartDbContext dbContext) : ControllerBa
     }
 
     [HttpPost]
+    [Authorize(Roles = "admin,super_admin")]
     public async Task<ActionResult<MallDto>> Create(MallDto request)
     {
         var entity = request.ToEntity();
@@ -68,6 +70,7 @@ public sealed class MallsController(SwiftCartDbContext dbContext) : ControllerBa
     }
 
     [HttpPut("{mallId}")]
+    [Authorize(Roles = "admin,super_admin")]
     public async Task<ActionResult<MallDto>> Update(string mallId, MallDto request)
     {
         var normalizedMallId = mallId.Trim().ToUpperInvariant();
@@ -99,6 +102,7 @@ public sealed class MallsController(SwiftCartDbContext dbContext) : ControllerBa
     }
 
     [HttpPost("{mallId}/deactivate")]
+    [Authorize(Roles = "admin,super_admin")]
     public async Task<IActionResult> Deactivate(string mallId)
     {
         var normalizedMallId = mallId.Trim().ToUpperInvariant();

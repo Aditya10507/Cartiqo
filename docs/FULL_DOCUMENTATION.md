@@ -1,336 +1,202 @@
-# Cartiqo (SwiftCart) Project Summary
+# Full Project Documentation
 
-_Generated on 2026-03-25 from the current codebase._
+## 1. Overview
 
-## One-Line Description
+Cartiqo / SwiftCart is a Flutter retail platform that supports:
 
-Cartiqo is a Flutter + Firebase retail checkout and mall-operations platform: a customer-facing scan-to-bill app and a web portal for admins and mall managers to manage malls, subscriptions, managers, inventory, QR/barcode assets, and sales history.
+- customer shopping and checkout
+- mall manager inventory and sales operations
+- admin-level mall and manager control
 
-## What Exists In This Repo
+The current architecture is Azure-based and no longer depends on Firebase at runtime.
 
-- Flutter app (Android/iOS/Web) built with Provider state management.
-- Web portal homepage with Admin login and Mall Manager login entry points.
-- Firestore-backed data model for malls, managers, products, barcodes, payments, promotions, announcements, staff activity, support requests, and user profiles.
-- CSV export utilities and PDF/print utilities for labels and receipts.
-- Firebase Cloud Functions (Node.js/TypeScript) for OTP flows (phone OTP SMS, email OTP signup, password reset OTP) plus scheduled cleanup jobs.
+## 2. Architecture
 
-## Primary Roles and Portals
+### Frontend
 
-- Customer/App User: signs up/logs in (email/password or OTP), selects a mall, scans items, builds cart, and checks out.
-- Admin (Web): manages malls, subscriptions, managers, and operational dashboards; monitors support requests and announcements.
-- Mall Manager (Web): logs in via manager ID + password; manages products, barcodes, billing settings, promotions, and sales analytics with CSV export.
+- Flutter
+- Provider
+- service-layer API calls through `lib/services`
 
+### Backend
 
----
+- ASP.NET Core Web API
+- Entity Framework Core
+- MySQL
 
-# Models, Tools, and Technologies
+### Hosting
 
-_Generated on 2026-03-25 from the current codebase._
+- Azure App Service
+- Azure Database for MySQL Flexible Server
+- Azure Storage Static Website Hosting
 
-## Core App Stack
+## 3. User Roles
 
-- Flutter (Dart) for Android/iOS/Web UI.
-- Provider for state management.
-- Firebase Core + Cloud Firestore as the primary backend database.
-- Firebase Auth for user authentication.
-- Firebase Hosting for web deployment.
+### Customer
 
-## Operational/Feature Libraries
+- email OTP-based signup
+- username/password sign in
+- forgot-password reset with email OTP
+- mall selection
+- product search and barcode lookup
+- checkout and history
 
-- mobile_scanner + vibration: barcode/QR scanning with haptics feedback.
-- pdf + printing: generate printable PDFs (labels/receipts) and trigger print dialogs.
-- csv + file_picker + web download helper: export operational data (sales dashboard, subscriptions, etc.) as CSV.
-- crypto (sha256): hashing for manager/admin credential workflows stored in Firestore (as implemented in providers).
-- qr_flutter: QR generation for mall assets and labels.
+### Mall Manager
 
-## Firebase Cloud Functions Stack (functions/)
+- manager login
+- product CRUD
+- billing settings
+- promotions
+- staff activity
+- payment history
 
-- Runtime: 20
-- TypeScript build pipeline (`npm run build`).
-- firebase-admin + firebase-functions.
-- Twilio for SMS OTP sending (requires Twilio env vars).
-- Resend (HTTP API) for email OTP flows (requires API key).
+### Admin
 
-## Flutter Dependencies (pubspec.yaml)
-
-### Dependencies
-
-```yaml
-flutter: (sdk)
-cupertino_icons: ^1.0.8
-firebase_core: ^4.4.0
-cloud_firestore: ^6.1.2
-firebase_auth: ^6.1.4
-provider: ^6.1.5+1
-mobile_scanner: ^7.2.0
-vibration: ^2.1.0
-image_picker: ^1.1.2
-path_provider: ^2.1.5
-crypto: ^3.0.3
-qr_flutter: ^4.1.0
-pdf: ^3.11.3
-printing: ^5.14.2
-csv: ^6.0.0
-file_picker: ^8.0.0
-```
-
-### Dev Dependencies
-
-```yaml
-flutter_test: (sdk)
-flutter_lints: ^6.0.0
-```
-
-
----
-
-# App and Website Workflows
-
-_Generated on 2026-03-25 from the current codebase._
-
-## Customer App Workflow (Mobile)
-
-- Auth: Email/password signup + email verification OR phone OTP login.
-- Mall selection: choose a mall from Firestore (`malls` collection).
-- Scan-to-cart: barcode scanner reads product barcode; maps barcode to product in the selected mall.
-- Cart management: add/remove items and adjust quantities.
-- Checkout: billing settings (GST/tax/extra charges) applied; payment record is created in Firestore under mall payments.
-- History: user profile provides access to previous bills and payments (per-user subcollections).
-
-## Admin Web Portal Workflow
-
-- Admin login (web) then access Admin dashboard.
-- Create and manage malls and subscriptions (also stored in `mall_subscriptions`).
-- Manage mall managers (multiple managers per mall): create/update/reset credentials, view manager list for a mall.
-- Monitor recent activity and payments (uses `collectionGroup('payments')` watch).
-- Announcements + support requests workflows (create announcements, triage support tickets).
-- Exporting: subscription/summary and other admin tables can be exported as CSV (where enabled).
-
-## Mall Manager Web Portal Workflow
-
-- Manager login using manager ID + password (lookup via `manager_index` and `malls/{mallId}/managers`).
-- Inventory: create/update/delete products in `malls/{mallId}/products`.
-- Barcode mapping: maintain `malls/{mallId}/barcodes` mapping for fast scanning.
-- Billing settings: update GST/tax/extra charges stored under the mall document (`billingSettings`).
-- Promotions: create and manage promotions under `malls/{mallId}/promotions`.
-- Sales dashboard: filter and consolidate payments, group analysis (day/week/month/year), refresh button, and CSV export.
-- Staff activity logging: key actions recorded under `malls/{mallId}/staff_activity`.
-
-
----
-
-# Data Models (Dart)
-
-_Generated on 2026-03-25 from lib/models._
-
-## Model Files
-
-- lib/models/admin.dart (50 lines)
-- lib/models/cart_item.dart (20 lines)
-- lib/models/mall_billing_settings.dart (51 lines)
-- lib/models/mall_manager_account.dart (37 lines)
-- lib/models/mall_manager_profile.dart (70 lines)
-- lib/models/mall_product.dart (62 lines)
-- lib/models/mall_subscription.dart (103 lines)
-
-## Notes
-
-These are the primary client-side data structures used to map Firestore documents into strongly-typed Dart objects.
-
-### lib/models/admin.dart
-
-- Classes: Admin
-
-### lib/models/cart_item.dart
-
-- Classes: CartItem
-
-### lib/models/mall_billing_settings.dart
-
-- Classes: MallBillingSettings
-
-### lib/models/mall_manager_account.dart
-
-- Classes: MallManagerAccount
-
-### lib/models/mall_manager_profile.dart
-
-- Classes: MallManagerProfile
-
-### lib/models/mall_product.dart
-
-- Classes: MallProduct
-
-### lib/models/mall_subscription.dart
-
-- Classes: MallSubscription
-
-
----
-
-# Firestore Collections and Schema (Inferred)
-
-_Generated on 2026-03-25 by scanning Firestore calls in lib/ and functions/._
-
-## Top-Level Collections Referenced
-
-- _test
-- admins
+- admin login
+- malls CRUD
+- manager account administration
 - announcements
+- support request tracking
+- payment overview
+
+## 4. Backend Data Domains
+
+The main MySQL domains are:
+
+- admins
+- malls
+- mall managers
+- users
+- user signup OTPs
+- user password reset OTPs
+- products
 - barcodes
 - bills
-- email_otp_signup
-- mall_subscriptions
-- malls
-- manager_index
-- managers
-- password_reset_otp
 - payments
-- phone_otp
-- products
+- announcements
+- support requests
 - promotions
-- staff_activity
-- support_requests
-- users
+- staff activity
 
-## Collection Group Queries Referenced
+## 5. Backend API
 
-- payments
+### System
 
-## Known Subcollection Patterns (Observed in Code)
+- `GET /api/health`
 
-- malls/{mallId}/products
-- malls/{mallId}/barcodes
-- malls/{mallId}/payments
-- malls/{mallId}/managers
-- malls/{mallId}/promotions
-- malls/{mallId}/staff_activity
-- users/{uid}/bills
-- users/{uid}/payments
+### Admin API
 
-## OTP/Support Collections (Used by Auth + Functions)
+- `POST /api/auth/admin/login`
+- `GET /api/malls`
+- `GET /api/malls/{mallId}`
+- `POST /api/malls`
+- `PUT /api/malls/{mallId}`
+- `POST /api/malls/{mallId}/deactivate`
+- `PUT /api/malls/{mallId}/billing-settings`
+- `GET /api/malls/{mallId}/managers`
+- `GET /api/malls/{mallId}/managers/count`
+- `POST /api/malls/{mallId}/managers`
+- `POST /api/malls/{mallId}/managers/{managerId}/reset-password`
+- `POST /api/malls/{mallId}/managers/{managerId}/unlink`
+- `POST /api/malls/{mallId}/managers/{managerId}/active`
+- `GET /api/announcements`
+- `POST /api/announcements`
+- `GET /api/supportrequests`
+- `POST /api/supportrequests`
+- `POST /api/supportrequests/{requestId}/status`
+- `GET /api/payments/recent`
 
-- phone_otp (SMS OTP documents)
-- email_otp_signup (email signup OTP documents)
-- password_reset_otp (password reset OTP documents)
-- support_requests (web portal contact/demo requests)
+### Mall Manager API
 
+- `POST /api/auth/mall-manager/login`
+- `GET /api/mall-manager/profile`
+- `PUT /api/mall-manager/profile`
+- `GET /api/mall-manager/promotions`
+- `POST /api/mall-manager/promotions`
+- `DELETE /api/mall-manager/promotions/{promotionId}`
+- `GET /api/mall-manager/staff-activity`
+- `GET /api/payments/malls/{mallId}`
+- `GET /api/malls/{mallId}/products`
+- `GET /api/malls/{mallId}/products/barcode/{barcode}`
+- `POST /api/malls/{mallId}/products`
+- `PUT /api/malls/{mallId}/products/{productId}`
+- `DELETE /api/malls/{mallId}/products/{productId}`
 
----
+### Customer/Public API
 
-# Code Walkthrough (Inventory)
+- `POST /api/auth/users/register/request-otp`
+- `POST /api/auth/users/register/verify-otp`
+- `POST /api/auth/users/login`
+- `POST /api/auth/users/password/request-otp`
+- `POST /api/auth/users/password/reset`
+- `GET /api/public/malls/{mallId}/products`
+- `GET /api/public/malls/{mallId}/products/barcode/{barcode}`
+- `GET /api/public/malls/{mallId}/billing-settings`
+- `POST /api/public/malls/{mallId}/checkout`
+- `GET /api/public/users/{uid}`
+- `PUT /api/public/users/{uid}`
+- `GET /api/public/users/{uid}/bills`
+- `GET /api/public/users/{uid}/payments`
 
-_Generated on 2026-03-25 from the current lib/ layout._
+## 6. Flutter Integration Pattern
 
-## Screens (UI)
+The Flutter app follows this pattern:
 
-- lib/screens/add_mall_screen.dart: AddMallScreen, _AddMallScreenState
-- lib/screens/admin_dashboard_screen.dart: AdminDashboardScreen, _AdminDashboardScreenState, _StatCard, _MallCard
-- lib/screens/admin_login_screen.dart: AdminLoginScreen, _AdminLoginScreenState
-- lib/screens/barcode_library_screen.dart: BarcodeLibraryScreen, _BarcodeLibraryScreenState, _HeaderPanel, _BarcodeLibraryCard, _QueuePanel, _MobileQueueBar, _PrintHistoryEntry, _EmptyBarcodeState
-- lib/screens/barcode_scanner_screen.dart: BarcodeScannerScreen, _BarcodeScannerScreenState, _CornerHighlight, _CornerPainter
-- lib/screens/cart_screen.dart: CartScreen
-- lib/screens/checkout_flow_screen.dart: CheckoutReviewScreen, PaymentMethodScreen, _PaymentMethodScreenState, PaymentGatewayScreen, _PaymentGatewayScreenState, PaymentSuccessScreen, _CheckoutHeader, _BillItemCard, _SummaryCard, _SummaryRow, _PaymentMethodOption
-- lib/screens/email_otp_forgot_password_screen.dart: EmailOtpForgotPasswordScreen, _EmailOtpForgotPasswordScreenState
-- lib/screens/email_otp_signup_screen.dart: EmailOtpSignupScreen, _EmailOtpSignupScreenState
-- lib/screens/email_verification_pending_screen.dart: EmailVerificationPendingScreen
-- lib/screens/import_export_screen.dart: ImportExportScreen, _ImportExportScreenState, _ImportProgressDialog, _ImportProgressDialogState
-- lib/screens/mall_billing_settings_screen.dart: MallBillingSettingsScreen, _MallBillingSettingsScreenState
-- lib/screens/mall_details_screen.dart: MallDetailsScreen, _SectionCard, _DetailRow, _ManagerTile
-- lib/screens/mall_manager_details_screen.dart: MallManagerDetailsScreen, _InfoRow, _StatusChip
-- lib/screens/mall_manager_login_screen.dart: MallManagerLoginScreen, _MallManagerLoginScreenState
-- lib/screens/mall_manager_profile_screen.dart: MallManagerProfileScreen, _MallManagerProfileScreenState
-- lib/screens/mall_managers_screen.dart: MallManagersScreen, _StatusChip
-- lib/screens/mall_qr_library_screen.dart: MallQrLibraryScreen, _MallQrLibraryScreenState, _MallQrCard, _EmptyMallQrState
-- lib/screens/mall_qr_scanner_screen.dart: MallQrScannerScreen, _MallQrScannerScreenState, _CornerBracketPainter
-- lib/screens/mall_select_screen.dart: MallSelectScreen, _MallSelectScreenState, _QuickChip
-- lib/screens/manage_subscription_screen.dart: ManageSubscriptionScreen, _ManageSubscriptionScreenState
-- lib/screens/phone_otp_auth_screen.dart: PhoneOtpAuthScreen, _PhoneOtpAuthScreenState
-- lib/screens/product_search_screen.dart: ProductSearchScreen, _ProductSearchScreenState, _SearchProductCard
-- lib/screens/products_management_screen.dart: ProductsManagementScreen, _ProductsManagementScreenState, _TopToolbar, _FilterBar, _SummaryCard, _ProductsTable, _EmptyProductState, _BillingSettingsDialog, _BillingSettingsDialogState, _ProductCard, _MetricChip, _AddProductDialog, _AddProductDialogState
-- lib/screens/sales_history_screen.dart: SalesHistoryScreen, _SalesHistoryScreenState, _HeroHeader, _FilterBar, _PaymentsTable, _Pill, _StatusPill, _Card, _Metric, _ConsolidatedSummaryCard, _SummaryRow, _TrendBucketsCard, _Bucket, _BucketAccumulator
-- lib/screens/scan_product_screen.dart: ScanProductScreen, _ScanProductScreenState
-- lib/screens/user_auth_screen.dart: UserAuthGateScreen, UserAuthScreen, _UserAuthScreenState, _ForgotPasswordDialog, _ForgotPasswordDialogState
-- lib/screens/user_profile_screen.dart: UserProfileScreen, _PersonalInfoTab, _BillsTab, _PaymentsTab, _InfoCard, _StatusChip, _SectionTitle, _ProfileAvatar, _AvatarPreset
-- lib/screens/web_admin_dashboard_screen.dart: WebAdminDashboardScreen, _WebAdminDashboardScreenState, _AdminSidebar, _AdminHeader, _DirectoryPanel, _DirectoryPanelState, _GridHint, _PlanBadge, _HealthBadge, _ActivityPanel, _SubscriptionHealthPanel, _AnnouncementsPanel, _SupportPanel, _ReportsPanel, _ActionStrip, _ActionData, _SideTile, _StatCard, _Panel, _MiniRow, _AnnouncementDialog, _AnnouncementDialogState
-- lib/screens/web_mall_manager_dashboard_screen.dart: WebMallManagerDashboardScreen, _ManagerSidebar, _ManagerHeader, _InventoryPanel, _InventoryPanelState, _GridHint, _StockBadge, _AlertsPanel, _BillingPreviewPanel, _TopProductsPanel, _TransactionsPanel, _PromotionsPanel, _SearchPanel, _StaffActivityPanel, _ActionRow, _ActionItem, _MenuTile, _ManagerStatCard, _Panel, _MiniCard, _PromotionDialog, _PromotionDialogState
-- lib/screens/web_portal_home_screen.dart: WebPortalHomeScreen, _TopBar, _HeroSection, _PortalSection, _DemoSection, _PricingSection, _CtaSection, _SectionShell, _AdaptiveList, _PortalCard, _DarkPanel, _DarkPanelItem, _InfoCard, _PlanCard, _PreviewRow, _BillLine, _Pill, _FooterSection, _SupportRequestDialog, _SupportRequestDialogState
-- lib/screens/web_portal_home_screen_stub.dart: WebPortalHomeScreen
+1. screen calls provider
+2. provider calls service
+3. service calls backend API
+4. backend returns DTO/data
+5. provider updates app state
+6. UI rebuilds
 
-## Providers (State + Firestore)
+## 7. Main Frontend Modules
 
-- lib/providers/admin_provider.dart: AdminProvider
-- lib/providers/cart_provider.dart: CartProvider
-- lib/providers/mall_manager_provider.dart: MallManagerProvider
-- lib/providers/user_auth_provider.dart: UserAuthProvider
+### Admin
 
-## Services (Export/Print/Utilities)
+- [admin_provider.dart](/c:/Users/GS/swiftcart_app/lib/providers/admin_provider.dart)
+- admin dashboard screens
 
-- lib/services/barcode_print_service.dart: BarcodeLabelData, BarcodePrintOptions, BarcodePrintService
-- lib/services/barcode_service.dart: BarcodeService
-- lib/services/csv_service.dart: CsvService, CsvImportResult
-- lib/services/file_download_service.dart: 
-- lib/services/file_download_service_stub.dart: 
-- lib/services/file_download_service_web.dart: 
-- lib/services/history_print_service.dart: HistoryPrintService
-- lib/services/mall_qr_print_service.dart: MallQrLabelData, MallQrPrintService
-- lib/services/page_transitions.dart: SlidePageTransition, FadePageTransition, RotatePageTransition
+### Mall Manager
 
-## Widgets (Reusable UI Components)
+- [mall_manager_provider.dart](/c:/Users/GS/swiftcart_app/lib/providers/mall_manager_provider.dart)
+- product and operations screens
 
-- lib/widgets/animated_button.dart: AnimatedButton, _AnimatedButtonState
-- lib/widgets/manager_sales_dashboard_panel.dart: ManagerSalesDashboardPanel, _ManagerSalesDashboardPanelState, _SalesMetricCard, _AnalysisChip, _HintChip, _SalesSummary, _GroupedSalesAccumulator, _GroupedSalesRow
-- lib/widgets/product_barcode_widget.dart: ProductBarcodeWidget, _Ean13BarcodePainter
-- lib/widgets/swiftcart_logo.dart: SwiftCartLogo, _SwiftCartLogoPainter
+### Customer
 
-## Cloud Functions Exports
+- [user_auth_provider.dart](/c:/Users/GS/swiftcart_app/lib/providers/user_auth_provider.dart)
+- checkout, search, scan, and profile screens
 
-- sendPhoneOtp
-- cleanupExpiredOtps
-- verifyOtpManual
-- logOtpEvent
-- sendEmailOtpSignup
-- sendPasswordResetOtp
-- cleanupExpiredEmailOtps
+## 8. Build And Run
 
-
----
-
-# Deployment and Operations
-
-_Generated on 2026-03-25._
-
-## Web Hosting (Firebase Hosting)
-
-Build + deploy steps:
+### Local backend
 
 ```powershell
-cd C:\Users\GS\swiftcart_app
-flutter pub get
-flutter build web --release
-firebase deploy --only hosting
+.\tools\run_backend_local.ps1 -ConnectionString "Server=localhost;Port=3306;Database=swiftcart_dev;User=root;Password=YOUR_PASSWORD;"
 ```
 
-## Cloud Functions (Firebase Functions)
-
-Local build steps:
+### Local Flutter app
 
 ```powershell
-cd C:\Users\GS\swiftcart_app\functions
-npm ci
-npm run build
-firebase deploy --only functions
+flutter run --dart-define=SWIFTCART_API_BASE_URL=http://localhost:5187
 ```
 
-### Important: Billing Plan Requirement
+### Production web build
 
-Deploying Cloud Functions can require enabling Google APIs (Cloud Build, Artifact Registry). If your Firebase project is on the free plan, deploy may be blocked until upgraded to Blaze.
+```powershell
+flutter build web --release --dart-define=SWIFTCART_API_BASE_URL=https://YOUR_API_HOST
+```
 
-## Required Secrets/Environment Variables (Functions)
+## 9. Deployment Summary
 
-- TWILIO_ACCOUNT_SID
-- TWILIO_AUTH_TOKEN
-- TWILIO_PHONE_NUMBER
-- RESEND_API_KEY (if using Resend email flow)
-- FROM_EMAIL (optional override)
+Production deployment uses Azure:
+
+- API -> Azure App Service
+- Database -> Azure Database for MySQL Flexible Server
+- Website -> Azure Storage Static Website Hosting
+
+## 10. Notes
+
+- Firebase runtime integration has been removed from the app
+- local secrets and environment-specific files should stay out of git
+- the backend supports both local and Azure-hosted operation through configuration
 

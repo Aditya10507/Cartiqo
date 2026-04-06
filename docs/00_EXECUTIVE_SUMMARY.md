@@ -1,22 +1,53 @@
-# Cartiqo (SwiftCart) Project Summary
+# Executive Summary
 
-_Generated on 2026-03-25 from the current codebase._
+Cartiqo / SwiftCart is a retail checkout and mall-management platform built with Flutter on the client side and ASP.NET Core + MySQL on the backend.
 
-## One-Line Description
+## Business Scope
 
-Cartiqo is a Flutter + Firebase retail checkout and mall-operations platform: a customer-facing scan-to-bill app and a web portal for admins and mall managers to manage malls, subscriptions, managers, inventory, QR/barcode assets, and sales history.
+The system supports three core personas:
 
-## What Exists In This Repo
+- customer
+- mall manager
+- system admin
 
-- Flutter app (Android/iOS/Web) built with Provider state management.
-- Web portal homepage with Admin login and Mall Manager login entry points.
-- Firestore-backed data model for malls, managers, products, barcodes, payments, promotions, announcements, staff activity, support requests, and user profiles.
-- CSV export utilities and PDF/print utilities for labels and receipts.
-- Firebase Cloud Functions (Node.js/TypeScript) for OTP flows (phone OTP SMS, email OTP signup, password reset OTP) plus scheduled cleanup jobs.
+## Customer-Side Capabilities
 
-## Primary Roles and Portals
+- browse/select a mall
+- search products
+- scan barcodes
+- checkout and store billing history
+- create an account using email OTP verification
+- sign in with username/password
+- reset password using email OTP
 
-- Customer/App User: signs up/logs in (email/password or OTP), selects a mall, scans items, builds cart, and checks out.
-- Admin (Web): manages malls, subscriptions, managers, and operational dashboards; monitors support requests and announcements.
-- Mall Manager (Web): logs in via manager ID + password; manages products, barcodes, billing settings, promotions, and sales analytics with CSV export.
+## Mall Manager Capabilities
+
+- log in to a mall-specific dashboard
+- manage products and barcode-linked inventory
+- update mall billing settings
+- create and remove promotions
+- review sales and payment history
+- track staff activity
+
+## Admin Capabilities
+
+- log in to the admin dashboard
+- create, update, and deactivate malls
+- manage mall manager accounts
+- publish announcements
+- track support/demo requests
+- review recent payments
+
+## Technical Direction
+
+The project has been fully migrated away from Firebase runtime dependencies. The current production stack is:
+
+- Flutter
+- Provider
+- ASP.NET Core Web API
+- Entity Framework Core
+- MySQL
+- Azure App Service
+- Azure Database for MySQL Flexible Server
+- Azure Static Website Hosting
 

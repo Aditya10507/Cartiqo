@@ -293,7 +293,6 @@ class AdminApiService {
     required String token,
     required String mallId,
     required String managerId,
-    required String password,
   }) async {
     final normalizedMallId = mallId.trim().toUpperCase();
     final response = await http.post(
@@ -302,7 +301,6 @@ class AdminApiService {
       body: jsonEncode({
         'mallId': normalizedMallId,
         'managerId': managerId.trim().toUpperCase(),
-        'password': password,
       }),
     );
 
@@ -310,26 +308,6 @@ class AdminApiService {
       final body = _decodeJson(response.body);
       throw Exception(
         _extractMessage(body, fallback: 'Failed to create manager.'),
-      );
-    }
-  }
-
-  Future<void> resetMallManagerPassword({
-    required String token,
-    required String mallId,
-    required String managerId,
-    required String newPassword,
-  }) async {
-    final response = await http.post(
-      _uri('/api/malls/${mallId.trim().toUpperCase()}/managers/${managerId.trim().toUpperCase()}/reset-password'),
-      headers: _authHeaders(token),
-      body: jsonEncode({'newPassword': newPassword}),
-    );
-
-    if (response.statusCode != 204) {
-      final body = _decodeJson(response.body);
-      throw Exception(
-        _extractMessage(body, fallback: 'Failed to reset manager password.'),
       );
     }
   }

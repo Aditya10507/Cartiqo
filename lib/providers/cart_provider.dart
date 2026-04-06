@@ -12,6 +12,8 @@ class CartProvider extends ChangeNotifier {
   int get totalItemsCount =>
       _items.values.fold(0, (sum, item) => sum + item.qty);
 
+  int quantityFor(String barcode) => _items[barcode]?.qty ?? 0;
+
   void addOrIncrement(CartItem item) {
     if (_items.containsKey(item.barcode)) {
       _items[item.barcode]!.qty += 1;

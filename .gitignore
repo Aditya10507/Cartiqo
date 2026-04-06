@@ -49,6 +49,7 @@ tools/azure_deploy_runtime.env
 tools/azure_jwt_secret.txt
 tools/*.sql
 tools/webapp-healthcheck.json
+artifacts/
 
 # Gradle cache
 android/.gradle/

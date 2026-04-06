@@ -1,38 +1,54 @@
-# Deployment and Operations
+# Deployment
 
-_Generated on 2026-03-25._
+## Production Hosting
 
-## Web Hosting (Firebase Hosting)
+Production uses Azure:
 
-Build + deploy steps:
+- Azure App Service for the backend API
+- Azure Database for MySQL Flexible Server for the database
+- Azure Storage Static Website Hosting for the Flutter web build
+
+## Local Development
+
+### Backend
+
+1. Install .NET SDK
+2. Install MySQL locally
+3. Update `backend/SwiftCart.Api/appsettings.Development.json`
+4. Run:
 
 ```powershell
-cd C:\Users\GS\swiftcart_app
+.\tools\run_backend_local.ps1 -ConnectionString "Server=localhost;Port=3306;Database=swiftcart_dev;User=root;Password=YOUR_PASSWORD;"
+```
+
+### Flutter
+
+```powershell
 flutter pub get
-flutter build web --release
-firebase deploy --only hosting
+flutter run --dart-define=SWIFTCART_API_BASE_URL=http://localhost:5187
 ```
 
-## Cloud Functions (Firebase Functions)
+For physical-device testing, use your machine IP instead of `localhost`.
 
-Local build steps:
+## Backend Deployment Notes
 
-```powershell
-cd C:\Users\GS\swiftcart_app\functions
-npm ci
-npm run build
-firebase deploy --only functions
-```
+- publish the API with `dotnet publish`
+- deploy the publish artifact to Azure App Service
+- set production app settings in Azure
+- point the API at the Azure MySQL connection string
 
-### Important: Billing Plan Requirement
+## Web Deployment Notes
 
-Deploying Cloud Functions can require enabling Google APIs (Cloud Build, Artifact Registry). If your Firebase project is on the free plan, deploy may be blocked until upgraded to Blaze.
+- build the Flutter web app with the production API URL
+- upload the generated `build/web` files to Azure Storage Static Website Hosting
 
-## Required Secrets/Environment Variables (Functions)
+## Important Secret Handling
 
-- TWILIO_ACCOUNT_SID
-- TWILIO_AUTH_TOKEN
-- TWILIO_PHONE_NUMBER
-- RESEND_API_KEY (if using Resend email flow)
-- FROM_EMAIL (optional override)
+Do not commit:
+
+- local MySQL passwords
+- Azure environment export files
+- JWT production secrets
+- SMTP app passwords
+- service account files
 

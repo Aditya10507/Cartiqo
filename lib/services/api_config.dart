@@ -1,6 +1,6 @@
 class ApiConfig {
   static const String baseUrl = String.fromEnvironment(
     'SWIFTCART_API_BASE_URL',
-    defaultValue: 'http://localhost:5187',
+    defaultValue: 'https://swiftcart-api-ea-9649.azurewebsites.net',
   );
 }

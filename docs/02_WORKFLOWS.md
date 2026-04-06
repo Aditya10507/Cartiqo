@@ -1,32 +1,67 @@
-# App and Website Workflows
+# Workflows
 
-_Generated on 2026-03-25 from the current codebase._
+## 1. Customer Flow
 
-## Customer App Workflow (Mobile)
+### Signup
 
-- Auth: Email/password signup + email verification OR phone OTP login.
-- Mall selection: choose a mall from Firestore (`malls` collection).
-- Scan-to-cart: barcode scanner reads product barcode; maps barcode to product in the selected mall.
-- Cart management: add/remove items and adjust quantities.
-- Checkout: billing settings (GST/tax/extra charges) applied; payment record is created in Firestore under mall payments.
-- History: user profile provides access to previous bills and payments (per-user subcollections).
+1. User opens the customer auth screen.
+2. User enters first name, last name, username, email, password, and confirm password.
+3. App requests an email OTP from the backend.
+4. User verifies the OTP.
+5. Backend creates the account and returns a session token.
 
-## Admin Web Portal Workflow
+### Sign In
 
-- Admin login (web) then access Admin dashboard.
-- Create and manage malls and subscriptions (also stored in `mall_subscriptions`).
-- Manage mall managers (multiple managers per mall): create/update/reset credentials, view manager list for a mall.
-- Monitor recent activity and payments (uses `collectionGroup('payments')` watch).
-- Announcements + support requests workflows (create announcements, triage support tickets).
-- Exporting: subscription/summary and other admin tables can be exported as CSV (where enabled).
+1. User enters username and password.
+2. App calls `POST /api/auth/users/login`.
+3. Backend validates credentials and returns the user session.
 
-## Mall Manager Web Portal Workflow
+### Forgot Password
 
-- Manager login using manager ID + password (lookup via `manager_index` and `malls/{mallId}/managers`).
-- Inventory: create/update/delete products in `malls/{mallId}/products`.
-- Barcode mapping: maintain `malls/{mallId}/barcodes` mapping for fast scanning.
-- Billing settings: update GST/tax/extra charges stored under the mall document (`billingSettings`).
-- Promotions: create and manage promotions under `malls/{mallId}/promotions`.
-- Sales dashboard: filter and consolidate payments, group analysis (day/week/month/year), refresh button, and CSV export.
-- Staff activity logging: key actions recorded under `malls/{mallId}/staff_activity`.
+1. User enters registered email.
+2. App requests a password reset OTP.
+3. User enters OTP and a new password.
+4. Backend updates the stored password hash.
+
+### Shopping And Checkout
+
+1. User selects a mall.
+2. App loads products from public mall endpoints.
+3. User searches or scans items.
+4. Cart is built in the Flutter app.
+5. Checkout is posted to the backend.
+6. Bill and payment records are stored in MySQL.
+
+## 2. Mall Manager Flow
+
+1. Manager logs in with manager ID and password.
+2. App loads profile, products, billing settings, promotions, and payment history.
+3. Manager can:
+   - add/update/delete products
+   - view barcode-linked inventory
+   - manage promotions
+   - update billing settings
+   - view staff activity and payments
+
+## 3. Admin Flow
+
+1. Admin logs in with email and password.
+2. Dashboard loads malls, manager counts, recent payments, announcements, and support requests.
+3. Admin can:
+   - add or edit malls
+   - deactivate malls
+   - create mall managers
+   - reset manager passwords
+   - activate/deactivate manager accounts
+   - create announcements
+   - update support request status
+
+## 4. Website Public Flow
+
+The web portal home screen acts as the public entrypoint and routes users into:
+
+- customer-side usage
+- admin-side usage
+- mall-manager usage
+- support/demo request submission
 

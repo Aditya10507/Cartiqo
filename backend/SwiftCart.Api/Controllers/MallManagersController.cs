@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using SwiftCart.Api.Data;
 using SwiftCart.Api.Models.Entities;
 using SwiftCart.Api.Models.Managers;
-using SwiftCart.Api.Services;
 
 namespace SwiftCart.Api.Controllers;
 
@@ -12,8 +11,7 @@ namespace SwiftCart.Api.Controllers;
 [Route("api/malls/{mallId}/managers")]
 [Authorize(Roles = "admin,super_admin")]
 public sealed class MallManagersController(
-    SwiftCartDbContext dbContext,
-    PasswordHashService passwordHashService) : ControllerBase
+    SwiftCartDbContext dbContext) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<MallManagerDto>>> GetAll(string mallId)
@@ -43,21 +41,15 @@ public sealed class MallManagersController(
     {
         var normalizedMallId = Normalize(mallId);
         var normalizedManagerId = Normalize(request.ManagerId);
-        var password = request.Password.Trim();
 
         if (normalizedMallId != Normalize(request.MallId))
         {
             return BadRequest(new { message = "Mall ID mismatch." });
         }
 
-        if (string.IsNullOrWhiteSpace(normalizedManagerId) || string.IsNullOrWhiteSpace(password))
+        if (string.IsNullOrWhiteSpace(normalizedManagerId))
         {
-            return BadRequest(new { message = "Manager ID and password are required." });
-        }
-
-        if (password.Length < 6)
-        {
-            return BadRequest(new { message = "Password must be at least 6 characters." });
+            return BadRequest(new { message = "Manager ID is required." });
         }
 
         var mallExists = await dbContext.Malls.AnyAsync(x => x.MallId == normalizedMallId);
@@ -85,8 +77,8 @@ public sealed class MallManagersController(
             AssignedUid = null,
             AssignedEmail = null,
             IsActive = true,
-            PasswordHash = passwordHashService.ComputeSha256(password),
-            PasswordUpdatedAt = now,
+            PasswordHash = string.Empty,
+            PasswordUpdatedAt = null,
             CreatedAt = now,
             UpdatedAt = now,
         };
@@ -98,31 +90,6 @@ public sealed class MallManagersController(
             nameof(GetAll),
             new { mallId = normalizedMallId },
             MallManagerDto.FromEntity(entity));
-    }
-
-    [HttpPost("{managerId}/reset-password")]
-    public async Task<IActionResult> ResetPassword(
-        string mallId,
-        string managerId,
-        ResetMallManagerPasswordRequest request)
-    {
-        var entity = await FindManager(mallId, managerId);
-        if (entity is null)
-        {
-            return NotFound(new { message = "Manager not found." });
-        }
-
-        var password = request.NewPassword.Trim();
-        if (password.Length < 6)
-        {
-            return BadRequest(new { message = "Password must be at least 6 characters." });
-        }
-
-        entity.PasswordHash = passwordHashService.ComputeSha256(password);
-        entity.PasswordUpdatedAt = DateTime.UtcNow;
-        entity.UpdatedAt = DateTime.UtcNow;
-        await dbContext.SaveChangesAsync();
-        return NoContent();
     }
 
     [HttpPost("{managerId}/unlink")]

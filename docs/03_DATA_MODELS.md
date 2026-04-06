@@ -1,46 +1,61 @@
-# Data Models (Dart)
+# Data Models
 
-_Generated on 2026-03-25 from lib/models._
+## Flutter Models
 
-## Model Files
+Key client-side model classes include:
 
-- lib/models/admin.dart (50 lines)
-- lib/models/cart_item.dart (20 lines)
-- lib/models/mall_billing_settings.dart (51 lines)
-- lib/models/mall_manager_account.dart (37 lines)
-- lib/models/mall_manager_profile.dart (70 lines)
-- lib/models/mall_product.dart (62 lines)
-- lib/models/mall_subscription.dart (103 lines)
+- `Admin`
+- `MallSubscription`
+- `MallManagerAccount`
+- `MallManagerProfile`
+- `MallProduct`
+- `MallBillingSettings`
+- `AppUserSession`
+- cart and checkout-related UI models
 
-## Notes
+## Backend Entities
 
-These are the primary client-side data structures used to map Firestore documents into strongly-typed Dart objects.
+The MySQL schema is represented in [SwiftCartDbContext.cs](/c:/Users/GS/swiftcart_app/backend/SwiftCart.Api/Data/SwiftCartDbContext.cs).
 
-### lib/models/admin.dart
+Core entities:
 
-- Classes: Admin
+- `AdminEntity`
+- `MallEntity`
+- `MallManagerEntity`
+- `UserProfileEntity`
+- `UserEmailOtpEntity`
+- `UserPasswordResetOtpEntity`
+- `ProductEntity`
+- `BarcodeEntity`
+- `BillEntity`
+- `PaymentEntity`
+- `AnnouncementEntity`
+- `SupportRequestEntity`
+- `PromotionEntity`
+- `StaffActivityEntity`
 
-### lib/models/cart_item.dart
+## Important Data Domains
 
-- Classes: CartItem
+### Identity And Accounts
 
-### lib/models/mall_billing_settings.dart
+- admins
+- mall managers
+- users
+- signup OTP records
+- password reset OTP records
 
-- Classes: MallBillingSettings
+### Commerce
 
-### lib/models/mall_manager_account.dart
+- malls
+- products
+- barcode lookup data
+- bills
+- payments
 
-- Classes: MallManagerAccount
+### Operations
 
-### lib/models/mall_manager_profile.dart
-
-- Classes: MallManagerProfile
-
-### lib/models/mall_product.dart
-
-- Classes: MallProduct
-
-### lib/models/mall_subscription.dart
-
-- Classes: MallSubscription
+- announcements
+- support requests
+- promotions
+- staff activity
 

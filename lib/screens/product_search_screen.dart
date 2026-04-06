@@ -294,6 +294,7 @@ class _SearchProductCard extends StatelessWidget {
                           barcode: product.barcode,
                           price: product.price.round(),
                           unit: product.unit,
+                          imageUrl: product.imageUrl,
                         );
                         context.read<CartProvider>().addOrIncrement(item);
                         ScaffoldMessenger.of(context).showSnackBar(

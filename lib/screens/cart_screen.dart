@@ -166,18 +166,48 @@ class CartScreen extends StatelessWidget {
                                 children: [
                                   Row(
                                     children: [
-                                      CircleAvatar(
-                                        radius: 22,
-                                        backgroundColor:
-                                            const Color(0xFFE8F2FF),
-                                        child: Text(
-                                          item.name.isEmpty
-                                              ? 'P'
-                                              : item.name[0].toUpperCase(),
-                                          style: const TextStyle(
-                                            color: Color(0xFF0B5ED7),
-                                            fontWeight: FontWeight.w900,
-                                          ),
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: SizedBox(
+                                          width: 52,
+                                          height: 52,
+                                          child: item.imageUrl.trim().isEmpty
+                                              ? Container(
+                                                  color: const Color(0xFFE8F2FF),
+                                                  alignment: Alignment.center,
+                                                  child: Text(
+                                                    item.name.isEmpty
+                                                        ? 'P'
+                                                        : item.name[0].toUpperCase(),
+                                                    style: const TextStyle(
+                                                      color: Color(0xFF0B5ED7),
+                                                      fontWeight: FontWeight.w900,
+                                                    ),
+                                                  ),
+                                                )
+                                              : Image.network(
+                                                  item.imageUrl,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (
+                                                    context,
+                                                    error,
+                                                    stackTrace,
+                                                  ) {
+                                                    return Container(
+                                                      color: const Color(0xFFE8F2FF),
+                                                      alignment: Alignment.center,
+                                                      child: Text(
+                                                        item.name.isEmpty
+                                                            ? 'P'
+                                                            : item.name[0].toUpperCase(),
+                                                        style: const TextStyle(
+                                                          color: Color(0xFF0B5ED7),
+                                                          fontWeight: FontWeight.w900,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
                                         ),
                                       ),
                                       const SizedBox(width: 12),

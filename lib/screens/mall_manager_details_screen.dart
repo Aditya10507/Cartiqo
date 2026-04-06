@@ -98,57 +98,6 @@ class MallManagerDetailsScreen extends StatelessWidget {
                       _StatusChip(active: isActive),
                       TextButton.icon(
                         onPressed: () async {
-                          final passwordCtrl = TextEditingController();
-                          final confirmed = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: Text('Reset $managerId Password'),
-                              content: TextField(
-                                controller: passwordCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'New password',
-                                  hintText: 'At least 6 characters',
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text('Cancel'),
-                                ),
-                                FilledButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text('Reset'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirmed != true) return;
-
-                          final ok = await context
-                              .read<AdminProvider>()
-                              .resetMallManagerPassword(
-                                mallId: mallId,
-                                managerId: managerId,
-                                newPassword: passwordCtrl.text,
-                              );
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                ok
-                                    ? 'Password reset successfully'
-                                    : context.read<AdminProvider>().error ??
-                                          'Password reset failed',
-                              ),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.password_outlined),
-                        label: const Text('Reset Password'),
-                      ),
-                      TextButton.icon(
-                        onPressed: () async {
                           final ok = await context
                               .read<AdminProvider>()
                               .unlinkMallManager(

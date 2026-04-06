@@ -25,27 +25,69 @@ class MallManagerLoginResult {
   });
 }
 
+class MallManagerOtpRequestResult {
+  final String message;
+  final DateTime? expiresAtUtc;
+  final String? debugOtp;
+
+  const MallManagerOtpRequestResult({
+    required this.message,
+    required this.expiresAtUtc,
+    required this.debugOtp,
+  });
+}
+
 class MallManagerApiService {
   Uri _uri(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
 
-  Future<MallManagerLoginResult> login({
-    required String managerId,
-    required String password,
+  Future<MallManagerOtpRequestResult> requestLoginOtp({
+    required String email,
   }) async {
     final response = await http.post(
-      _uri('/api/auth/mall-manager/login'),
+      _uri('/api/auth/mall-manager/request-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email.trim().toLowerCase()}),
+    );
+
+    final body = _decodeJson(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(
+        _extractMessage(body, fallback: 'Unable to send manager OTP.'),
+      );
+    }
+
+    final map = Map<String, dynamic>.from(body as Map);
+    return MallManagerOtpRequestResult(
+      message: (map['message'] ?? 'Verification code sent.').toString(),
+      expiresAtUtc: _parseDateTime(map['expiresAtUtc']),
+      debugOtp: map['debugOtp']?.toString(),
+    );
+  }
+
+  Future<MallManagerLoginResult> verifyLoginOtp({
+    required String email,
+    required String otp,
+  }) async {
+    final response = await http.post(
+      _uri('/api/auth/mall-manager/verify-otp'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'managerId': managerId.trim().toUpperCase(),
-        'password': password,
+        'email': email.trim().toLowerCase(),
+        'otp': otp.trim(),
       }),
     );
 
     final body = _decodeJson(response.body);
     if (response.statusCode != 200) {
-      throw Exception(_extractMessage(body, fallback: 'Mall manager login failed.'));
+      throw Exception(
+        _extractMessage(body, fallback: 'Manager OTP verification failed.'),
+      );
     }
 
+    return _toLoginResult(body);
+  }
+
+  MallManagerLoginResult _toLoginResult(dynamic body) {
     final manager = Map<String, dynamic>.from(body['manager'] as Map);
     final mall = Map<String, dynamic>.from(body['mall'] as Map);
     final mallId = (manager['mallId'] ?? mall['mallId'] ?? '').toString();
@@ -386,6 +428,13 @@ class MallManagerApiService {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
+  }
+
+  DateTime? _parseDateTime(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    return DateTime.tryParse(value.toString())?.toUtc();
   }
 
   dynamic _decodeJson(String body) {

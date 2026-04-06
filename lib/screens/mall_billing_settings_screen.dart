@@ -185,6 +185,14 @@ class _MallBillingSettingsScreenState extends State<MallBillingSettingsScreen> {
   }
 
   Future<void> _save() async {
+    final validationMessage = _validateInputs();
+    if (validationMessage != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(validationMessage)));
+      return;
+    }
+
     setState(() => _saving = true);
 
     final settings = MallBillingSettings(
@@ -220,5 +228,39 @@ class _MallBillingSettingsScreenState extends State<MallBillingSettingsScreen> {
       Navigator.pop(context);
     }
   }
-}
 
+  String? _validateInputs() {
+    final gst = double.tryParse(_gstCtrl.text.trim());
+    final tax = double.tryParse(_taxCtrl.text.trim());
+    final extraCharge = double.tryParse(_extraChargeCtrl.text.trim());
+
+    if (_gstCtrl.text.trim().isNotEmpty && gst == null) {
+      return 'GST must be a valid number.';
+    }
+    if (_taxCtrl.text.trim().isNotEmpty && tax == null) {
+      return 'Additional tax must be a valid number.';
+    }
+    if (_extraChargeCtrl.text.trim().isNotEmpty && extraCharge == null) {
+      return 'Extra charge amount must be a valid number.';
+    }
+    if ((gst ?? 0) < 0 || (tax ?? 0) < 0 || (extraCharge ?? 0) < 0) {
+      return 'Billing values cannot be negative.';
+    }
+
+    final taxLabel = _taxLabelCtrl.text.trim();
+    if (taxLabel.isNotEmpty && _looksNumeric(taxLabel)) {
+      return 'Additional tax label should be text, not just a number.';
+    }
+
+    final extraChargeLabel = _extraChargeLabelCtrl.text.trim();
+    if (extraChargeLabel.isNotEmpty && _looksNumeric(extraChargeLabel)) {
+      return 'Extra charge label should be text, not just a number.';
+    }
+
+    return null;
+  }
+
+  bool _looksNumeric(String value) {
+    return RegExp(r'^\d+(\.\d+)?$').hasMatch(value);
+  }
+}

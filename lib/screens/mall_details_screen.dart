@@ -135,7 +135,6 @@ class MallDetailsScreen extends StatelessWidget {
 
   Future<void> _showAddManagerDialog(BuildContext context) async {
     final managerIdCtrl = TextEditingController();
-    final passwordCtrl = TextEditingController();
 
     await showDialog(
       context: context,
@@ -154,13 +153,9 @@ class MallDetailsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: passwordCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                hintText: 'At least 6 characters',
-                prefixIcon: Icon(Icons.lock_outline),
-              ),
+            const Text(
+              'After creation, link the manager email from the admin panel. The manager will sign in using email OTP.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
         ),
@@ -174,7 +169,6 @@ class MallDetailsScreen extends StatelessWidget {
               final ok = await context.read<AdminProvider>().createMallManager(
                 mallId: mall.mallId,
                 managerId: managerIdCtrl.text,
-                password: passwordCtrl.text,
               );
               if (!context.mounted) return;
               if (ok) {
@@ -380,76 +374,26 @@ class _ManagerTile extends StatelessWidget {
               ),
               TextButton(
                 onPressed: () async {
-                  final passwordCtrl = TextEditingController();
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: Text('Reset ${manager.managerId} Password'),
-                      content: TextField(
-                        controller: passwordCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'New password',
-                          hintText: 'At least 6 characters',
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Cancel'),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Reset'),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirmed != true) return;
-
                   final ok = await context
                       .read<AdminProvider>()
-                      .resetMallManagerPassword(
+                      .unlinkMallManager(
                         mallId: mall.mallId,
                         managerId: manager.managerId,
-                        newPassword: passwordCtrl.text,
                       );
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
                         ok
-                            ? 'Password reset successfully'
+                            ? 'Manager unlinked'
                             : context.read<AdminProvider>().error ??
-                                  'Password reset failed',
+                                  'Unlink failed',
                       ),
                     ),
                   );
                 },
-                child: const Text('Reset Password'),
+                child: const Text('Unlink'),
               ),
-              if (manager.assignedEmail?.trim().isNotEmpty == true)
-                TextButton(
-                  onPressed: () async {
-                    final ok = await context
-                        .read<AdminProvider>()
-                        .unlinkMallManager(
-                          mallId: mall.mallId,
-                          managerId: manager.managerId,
-                        );
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          ok
-                              ? 'Manager unlinked'
-                              : context.read<AdminProvider>().error ??
-                                    'Unlink failed',
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Text('Unlink'),
-                ),
             ],
           ),
         ],

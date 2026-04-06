@@ -17,6 +17,10 @@ class MallManagerProvider extends ChangeNotifier {
   MallManagerProfile? _profile;
   List<MallProduct> _products = [];
   MallBillingSettings _billingSettings = const MallBillingSettings();
+  bool _otpSent = false;
+  DateTime? _otpExpiresAt;
+  String? _pendingManagerEmail;
+  String? _debugOtp;
   bool _isLoading = false;
   String? _error;
 
@@ -26,6 +30,10 @@ class MallManagerProvider extends ChangeNotifier {
   MallManagerProfile? get profile => _profile;
   List<MallProduct> get products => _products;
   MallBillingSettings get billingSettings => _billingSettings;
+  bool get otpSent => _otpSent;
+  DateTime? get otpExpiresAt => _otpExpiresAt;
+  String? get pendingManagerEmail => _pendingManagerEmail;
+  String? get debugOtp => _debugOtp;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -177,18 +185,42 @@ class MallManagerProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> loginAsMallManager({
-    required String managerId,
-    required String password,
+  Future<bool> requestManagerEmailOtp({
+    required String email,
   }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final result = await _apiService.login(
-        managerId: managerId,
-        password: password,
+      final result = await _apiService.requestLoginOtp(email: email);
+      _pendingManagerEmail = email.trim().toLowerCase();
+      _otpSent = true;
+      _otpExpiresAt = result.expiresAtUtc;
+      _debugOtp = result.debugOtp;
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> verifyManagerEmailOtp({
+    required String email,
+    required String otp,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _apiService.verifyLoginOtp(
+        email: email,
+        otp: otp,
       );
 
       _accessToken = result.token;
@@ -197,14 +229,17 @@ class MallManagerProvider extends ChangeNotifier {
       _currentManagerEmail = result.email;
       _profile = result.profile;
       _billingSettings = result.billingSettings;
+      _otpSent = false;
+      _otpExpiresAt = null;
+      _pendingManagerEmail = null;
+      _debugOtp = null;
 
       await _fetchProducts();
       _isLoading = false;
       notifyListeners();
       return true;
     } catch (e) {
-      print('Login error: $e');
-      _error = 'Login error: $e';
+      _error = e.toString().replaceFirst('Exception: ', '');
       _isLoading = false;
       notifyListeners();
       return false;
@@ -348,6 +383,10 @@ class MallManagerProvider extends ChangeNotifier {
     _profile = null;
     _products = [];
     _billingSettings = const MallBillingSettings();
+    _otpSent = false;
+    _otpExpiresAt = null;
+    _pendingManagerEmail = null;
+    _debugOtp = null;
     _error = null;
     notifyListeners();
   }

@@ -4,6 +4,7 @@ class CartItem {
   final String barcode;
   final int price; // rupees
   final String unit;
+  final String imageUrl;
   int qty;
 
   CartItem({
@@ -12,6 +13,7 @@ class CartItem {
     required this.barcode,
     required this.price,
     required this.unit,
+    this.imageUrl = '',
     this.qty = 1,
   });
 

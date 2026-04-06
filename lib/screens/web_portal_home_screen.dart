@@ -5,8 +5,38 @@ import '../widgets/swiftcart_logo.dart';
 import 'admin_login_screen.dart';
 import 'mall_manager_login_screen.dart';
 
-class WebPortalHomeScreen extends StatelessWidget {
+class WebPortalHomeScreen extends StatefulWidget {
   const WebPortalHomeScreen({super.key});
+
+  @override
+  State<WebPortalHomeScreen> createState() => _WebPortalHomeScreenState();
+}
+
+class _WebPortalHomeScreenState extends State<WebPortalHomeScreen> {
+  final _scrollController = ScrollController();
+  final _howItWorksKey = GlobalKey();
+  final _plansKey = GlobalKey();
+  final _faqKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _scrollToSection(GlobalKey key) async {
+    final context = key.currentContext;
+    if (context == null) {
+      return;
+    }
+
+    await Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeInOutCubic,
+      alignment: 0.08,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +58,7 @@ class WebPortalHomeScreen extends StatelessWidget {
               final isWide = width >= 960;
 
               return SingleChildScrollView(
+                controller: _scrollController,
                 padding: const EdgeInsets.all(24),
                 child: Center(
                   child: ConstrainedBox(
@@ -35,13 +66,21 @@ class WebPortalHomeScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _TopBar(isWide: isWide),
+                        _TopBar(
+                          isWide: isWide,
+                          onHowItWorksTap: () => _scrollToSection(
+                            _howItWorksKey,
+                          ),
+                          onPlansTap: () => _scrollToSection(_plansKey),
+                          onFaqTap: () => _scrollToSection(_faqKey),
+                        ),
                         const SizedBox(height: 18),
                         _HeroSection(isWide: isWide),
                         const SizedBox(height: 18),
                         _PortalSection(isWide: isWide),
                         const SizedBox(height: 18),
                         _SectionShell(
+                          key: _howItWorksKey,
                           title: 'How It Works',
                           subtitle:
                               'Show the scan-to-bill journey clearly on the website.',
@@ -140,9 +179,13 @@ class WebPortalHomeScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        _PricingSection(isWide: isWide),
+                        _PricingSection(
+                          key: _plansKey,
+                          isWide: isWide,
+                        ),
                         const SizedBox(height: 18),
                         _SectionShell(
+                          key: _faqKey,
                           title: 'Testimonials And FAQ',
                           subtitle:
                               'Add proof and trust-building content to the marketing surface.',
@@ -190,15 +233,23 @@ class WebPortalHomeScreen extends StatelessWidget {
 
 class _TopBar extends StatelessWidget {
   final bool isWide;
+  final VoidCallback onHowItWorksTap;
+  final VoidCallback onPlansTap;
+  final VoidCallback onFaqTap;
 
-  const _TopBar({required this.isWide});
+  const _TopBar({
+    required this.isWide,
+    required this.onHowItWorksTap,
+    required this.onPlansTap,
+    required this.onFaqTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final links = const [
-      _Pill(label: 'How it works'),
-      _Pill(label: 'Plans'),
-      _Pill(label: 'FAQ'),
+    final links = [
+      _Pill(label: 'How it works', onTap: onHowItWorksTap),
+      _Pill(label: 'Plans', onTap: onPlansTap),
+      _Pill(label: 'FAQ', onTap: onFaqTap),
     ];
 
     final content = isWide
@@ -560,7 +611,7 @@ class _DemoSection extends StatelessWidget {
 class _PricingSection extends StatelessWidget {
   final bool isWide;
 
-  const _PricingSection({required this.isWide});
+  const _PricingSection({super.key, required this.isWide});
 
   @override
   Widget build(BuildContext context) {
@@ -732,6 +783,7 @@ class _SectionShell extends StatelessWidget {
   final Widget child;
 
   const _SectionShell({
+    super.key,
     required this.title,
     required this.subtitle,
     required this.child,
@@ -1164,23 +1216,28 @@ class _BillLine extends StatelessWidget {
 
 class _Pill extends StatelessWidget {
   final String label;
+  final VoidCallback? onTap;
 
-  const _Pill({required this.label});
+  const _Pill({required this.label, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFD6E4FF)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          color: Color(0xFF194067),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFD6E4FF)),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF194067),
+          ),
         ),
       ),
     );

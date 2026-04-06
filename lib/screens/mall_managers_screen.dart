@@ -86,7 +86,7 @@ class MallManagersScreen extends StatelessWidget {
 
                   return ListView.separated(
                     itemCount: managers.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, index) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       final m = managers[index];
                       final linkedEmail = (m.assignedEmail ?? '').trim();
@@ -130,63 +130,11 @@ class MallManagersScreen extends StatelessWidget {
                               PopupMenuButton<String>(
                                 tooltip: 'Actions',
                                 onSelected: (value) async {
-                                  if (value == 'reset_password') {
-                                    final passwordCtrl =
-                                        TextEditingController();
-                                    final confirmed = await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: Text(
-                                          'Reset ${m.managerId} Password',
-                                        ),
-                                        content: TextField(
-                                          controller: passwordCtrl,
-                                          decoration: const InputDecoration(
-                                            labelText: 'New password',
-                                            hintText: 'At least 6 characters',
-                                          ),
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, false),
-                                            child: const Text('Cancel'),
-                                          ),
-                                          FilledButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, true),
-                                            child: const Text('Reset'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-
-                                    if (confirmed != true) return;
-
-                                    final ok = await context
-                                        .read<AdminProvider>()
-                                        .resetMallManagerPassword(
-                                          mallId: mall.mallId,
-                                          managerId: m.managerId,
-                                          newPassword: passwordCtrl.text,
-                                        );
-                                    if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          ok
-                                              ? 'Password reset successfully'
-                                              : context
-                                                        .read<AdminProvider>()
-                                                        .error ??
-                                                    'Password reset failed',
-                                        ),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
                                   if (value == 'unlink') {
+                                    final adminProvider =
+                                        context.read<AdminProvider>();
+                                    final messenger =
+                                        ScaffoldMessenger.of(context);
                                     final shouldUnlink = await showDialog<bool>(
                                       context: context,
                                       builder: (context) => AlertDialog(
@@ -218,22 +166,19 @@ class MallManagersScreen extends StatelessWidget {
 
                                     if (shouldUnlink != true) return;
 
-                                    final ok = await context
-                                        .read<AdminProvider>()
+                                    final ok = await adminProvider
                                         .unlinkMallManager(
-                                          mallId: mall.mallId,
-                                          managerId: m.managerId,
-                                        );
+                                      mallId: mall.mallId,
+                                      managerId: m.managerId,
+                                    );
                                     if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
+                                    messenger.showSnackBar(
                                       SnackBar(
                                         content: Text(
                                           ok
                                               ? 'Manager unlinked'
-                                              : context
-                                                        .read<AdminProvider>()
-                                                        .error ??
-                                                    'Unlink failed',
+                                              : adminProvider.error ??
+                                                  'Unlink failed',
                                         ),
                                       ),
                                     );
@@ -266,14 +211,6 @@ class MallManagersScreen extends StatelessWidget {
                                   }
                                 },
                                 itemBuilder: (_) => [
-                                  const PopupMenuItem(
-                                    value: 'reset_password',
-                                    child: ListTile(
-                                      dense: true,
-                                      leading: Icon(Icons.password_outlined),
-                                      title: Text('Reset Password'),
-                                    ),
-                                  ),
                                   const PopupMenuItem(
                                     value: 'unlink',
                                     child: ListTile(
@@ -316,11 +253,13 @@ class MallManagersScreen extends StatelessWidget {
 
   Future<void> _showAddManagerDialog(BuildContext context) async {
     final managerIdCtrl = TextEditingController();
-    final passwordCtrl = TextEditingController();
+    final adminProvider = context.read<AdminProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
 
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Add Mall Manager'),
         content: SingleChildScrollView(
           child: Column(
@@ -336,17 +275,8 @@ class MallManagersScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              TextField(
-                controller: passwordCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  hintText: 'At least 6 characters',
-                  prefixIcon: Icon(Icons.lock_outline),
-                ),
-              ),
-              const SizedBox(height: 10),
               const Text(
-                'Tip: Share the manager ID and password with the mall manager. They can now log in directly without email setup.',
+                'Tip: After creation, link the manager email from the admin panel. The mall manager will sign in using email OTP.',
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
@@ -354,29 +284,26 @@ class MallManagersScreen extends StatelessWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () async {
-              final ok = await context.read<AdminProvider>().createMallManager(
+              final ok = await adminProvider.createMallManager(
                 mallId: mall.mallId,
                 managerId: managerIdCtrl.text,
-                password: passwordCtrl.text,
               );
-              if (!context.mounted) return;
               if (!ok) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   SnackBar(
                     content: Text(
-                      context.read<AdminProvider>().error ??
-                          'Failed to add manager',
+                      adminProvider.error ?? 'Failed to add manager',
                     ),
                   ),
                 );
                 return;
               }
-              Navigator.pop(context);
+              navigator.pop();
             },
             child: const Text('Create'),
           ),

@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../app/app.dart';
 import '../providers/mall_manager_provider.dart';
 import '../widgets/swiftcart_logo.dart';
@@ -15,43 +16,61 @@ class MallManagerLoginScreen extends StatefulWidget {
 }
 
 class _MallManagerLoginScreenState extends State<MallManagerLoginScreen> {
-  final _managerIdCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _otpCtrl = TextEditingController();
   bool _isLoading = false;
-  bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _managerIdCtrl.dispose();
-    _passwordCtrl.dispose();
+    _emailCtrl.dispose();
+    _otpCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _login() async {
-    final managerId = _managerIdCtrl.text.trim().toUpperCase();
-    final password = _passwordCtrl.text;
-
-    if (managerId.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter Manager ID')));
-      return;
-    }
-
-    if (password.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter Password')));
+  Future<void> _requestOtp() async {
+    final email = _emailCtrl.text.trim().toLowerCase();
+    if (email.isEmpty || !email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter registered manager email')),
+      );
       return;
     }
 
     setState(() => _isLoading = true);
-
     final provider = context.read<MallManagerProvider>();
-    final success = await provider.loginAsMallManager(
-      managerId: managerId,
-      password: password,
+    final success = await provider.requestManagerEmailOtp(email: email);
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? (provider.error ?? 'OTP sent to manager email.')
+              : (provider.error ?? 'Unable to send OTP'),
+        ),
+      ),
     );
+
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _verifyOtp() async {
+    final provider = context.read<MallManagerProvider>();
+    final email = (provider.pendingManagerEmail ?? _emailCtrl.text)
+        .trim()
+        .toLowerCase();
+    final otp = _otpCtrl.text.trim();
+
+    if (otp.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid 6-digit OTP')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    final success = await provider.verifyManagerEmailOtp(email: email, otp: otp);
 
     if (!mounted) return;
 
@@ -64,9 +83,9 @@ class _MallManagerLoginScreenState extends State<MallManagerLoginScreen> {
         ),
       );
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(provider.error ?? 'Login failed')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(provider.error ?? 'OTP verification failed')),
+      );
     }
 
     setState(() => _isLoading = false);
@@ -74,13 +93,18 @@ class _MallManagerLoginScreenState extends State<MallManagerLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        // Navigate to home instead of going back
+    final provider = context.watch<MallManagerProvider>();
+    final otpSent = provider.otpSent;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          return;
+        }
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const AppModeSelector()),
         );
-        return false; // Prevent default back behavior
       },
       child: Scaffold(
         appBar: AppBar(title: const Text('Mall Manager'), elevation: 0),
@@ -116,45 +140,95 @@ class _MallManagerLoginScreenState extends State<MallManagerLoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Login with your manager ID and password',
+                        'Verify your assigned email to access the manager dashboard',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 14, color: Colors.grey),
                       ),
                       const SizedBox(height: 28),
-                      TextField(
-                        controller: _managerIdCtrl,
-                        textCapitalization: TextCapitalization.characters,
-                        decoration: InputDecoration(
-                          labelText: 'Manager ID',
-                          hintText: 'e.g., MGR01',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
+                      if (!otpSent) ...[
+                        TextField(
+                          controller: _emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: InputDecoration(
+                            labelText: 'Registered Email',
+                            hintText: 'manager@mall.com',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            prefixIcon: const Icon(Icons.mail_outline),
                           ),
-                          prefixIcon: const Icon(Icons.badge_outlined),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _passwordCtrl,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
+                      ] else ...[
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FBFF),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          suffixIcon: IconButton(
-                            onPressed: () => setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            }),
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility
-                                  : Icons.visibility_off,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Registered email',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF5F6C7C),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                provider.pendingManagerEmail ?? _emailCtrl.text.trim(),
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (provider.otpExpiresAt != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Code valid until ${provider.otpExpiresAt!.toLocal()}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF5F6C7C),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _otpCtrl,
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          decoration: InputDecoration(
+                            labelText: 'OTP',
+                            hintText: 'Enter 6-digit code',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            prefixIcon: const Icon(Icons.verified_user_outlined),
+                            counterText: '',
+                          ),
+                        ),
+                        if (provider.debugOtp != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF8E1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              'Development OTP: ${provider.debugOtp}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF7C5A00),
+                              ),
                             ),
                           ),
-                        ),
-                      ),
+                        ],
+                      ],
                       const SizedBox(height: 18),
                       Container(
                         padding: const EdgeInsets.all(12),
@@ -162,14 +236,16 @@ class _MallManagerLoginScreenState extends State<MallManagerLoginScreen> {
                           color: const Color(0xFFF8FBFF),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
-                            Icon(Icons.info_outline, color: Color(0xFF0B5ED7)),
-                            SizedBox(width: 10),
+                            const Icon(Icons.info_outline, color: Color(0xFF0B5ED7)),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'If your password is missing or incorrect, ask the admin to reset it from the mall manager panel.',
-                                style: TextStyle(
+                                otpSent
+                                    ? 'Enter the OTP sent to your assigned email. If it does not arrive, ask the admin to confirm your linked email address.'
+                                    : 'Use the email assigned to your mall manager account. We will send a verification code before opening the dashboard.',
+                                style: const TextStyle(
                                   fontSize: 13,
                                   color: Color(0xFF5F6C7C),
                                   height: 1.45,
@@ -179,10 +255,13 @@ class _MallManagerLoginScreenState extends State<MallManagerLoginScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 18),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _isLoading ? null : _login,
+                          onPressed: _isLoading
+                              ? null
+                              : (otpSent ? _verifyOtp : _requestOtp),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             foregroundColor: Colors.white,
@@ -199,15 +278,30 @@ class _MallManagerLoginScreenState extends State<MallManagerLoginScreen> {
                                     ),
                                   ),
                                 )
-                              : const Text(
-                                  'Continue',
-                                  style: TextStyle(
+                              : Text(
+                                  otpSent ? 'Verify OTP' : 'Send OTP',
+                                  style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
                         ),
                       ),
+                      if (otpSent) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () {
+                                    _otpCtrl.clear();
+                                    provider.logout();
+                                  },
+                            child: const Text('Use another email'),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
