@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/admin_provider.dart';
+import '../providers/mall_manager_provider.dart';
 import '../services/admin_api_service.dart';
 import '../widgets/swiftcart_logo.dart';
-import 'admin_login_screen.dart';
-import 'mall_manager_login_screen.dart';
+import 'admin_login_screen.dart' deferred as admin_login;
+import 'mall_manager_login_screen.dart' deferred as mall_manager_login;
 
 class WebPortalHomeScreen extends StatefulWidget {
   const WebPortalHomeScreen({super.key});
@@ -35,6 +38,36 @@ class _WebPortalHomeScreenState extends State<WebPortalHomeScreen> {
       duration: const Duration(milliseconds: 450),
       curve: Curves.easeInOutCubic,
       alignment: 0.08,
+    );
+  }
+
+  Future<void> _openAdminPortal() async {
+    await admin_login.loadLibrary();
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider(
+          create: (_) => AdminProvider(),
+          child: admin_login.AdminLoginScreen(),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openManagerPortal() async {
+    await mall_manager_login.loadLibrary();
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider(
+          create: (_) => MallManagerProvider(),
+          child: mall_manager_login.MallManagerLoginScreen(),
+        ),
+      ),
     );
   }
 
@@ -73,11 +106,20 @@ class _WebPortalHomeScreenState extends State<WebPortalHomeScreen> {
                           ),
                           onPlansTap: () => _scrollToSection(_plansKey),
                           onFaqTap: () => _scrollToSection(_faqKey),
+                          onOpenWorkspaceTap: _openManagerPortal,
                         ),
                         const SizedBox(height: 18),
-                        _HeroSection(isWide: isWide),
+                        _HeroSection(
+                          isWide: isWide,
+                          onOpenManagerPortal: _openManagerPortal,
+                          onOpenAdminPortal: _openAdminPortal,
+                        ),
                         const SizedBox(height: 18),
-                        _PortalSection(isWide: isWide),
+                        _PortalSection(
+                          isWide: isWide,
+                          onOpenAdminPortal: _openAdminPortal,
+                          onOpenManagerPortal: _openManagerPortal,
+                        ),
                         const SizedBox(height: 18),
                         _SectionShell(
                           key: _howItWorksKey,
@@ -215,7 +257,10 @@ class _WebPortalHomeScreenState extends State<WebPortalHomeScreen> {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        _CtaSection(isWide: isWide),
+                        _CtaSection(
+                          isWide: isWide,
+                          onOpenManagerPortal: _openManagerPortal,
+                        ),
                         const SizedBox(height: 18),
                         const _FooterSection(),
                       ],
@@ -236,12 +281,14 @@ class _TopBar extends StatelessWidget {
   final VoidCallback onHowItWorksTap;
   final VoidCallback onPlansTap;
   final VoidCallback onFaqTap;
+  final VoidCallback onOpenWorkspaceTap;
 
   const _TopBar({
     required this.isWide,
     required this.onHowItWorksTap,
     required this.onPlansTap,
     required this.onFaqTap,
+    required this.onOpenWorkspaceTap,
   });
 
   @override
@@ -285,11 +332,7 @@ class _TopBar extends StatelessWidget {
               ...links,
               const SizedBox(width: 12),
               FilledButton(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const MallManagerLoginScreen(),
-                  ),
-                ),
+                onPressed: onOpenWorkspaceTap,
                 child: const Text('Open workspace'),
               ),
             ],
@@ -318,11 +361,7 @@ class _TopBar extends StatelessWidget {
                     ),
                   ),
                   FilledButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const MallManagerLoginScreen(),
-                      ),
-                    ),
+                    onPressed: onOpenWorkspaceTap,
                     child: const Text('Open'),
                   ),
                 ],
@@ -346,8 +385,14 @@ class _TopBar extends StatelessWidget {
 
 class _HeroSection extends StatelessWidget {
   final bool isWide;
+  final VoidCallback onOpenManagerPortal;
+  final VoidCallback onOpenAdminPortal;
 
-  const _HeroSection({required this.isWide});
+  const _HeroSection({
+    required this.isWide,
+    required this.onOpenManagerPortal,
+    required this.onOpenAdminPortal,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -400,18 +445,12 @@ class _HeroSection extends StatelessWidget {
           runSpacing: 12,
           children: [
             FilledButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const MallManagerLoginScreen(),
-                ),
-              ),
+              onPressed: onOpenManagerPortal,
               icon: const Icon(Icons.storefront_outlined),
               label: const Text('Open manager portal'),
             ),
             OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
-              ),
+              onPressed: onOpenAdminPortal,
               icon: const Icon(Icons.admin_panel_settings_outlined),
               label: const Text('Open admin portal'),
             ),
@@ -465,8 +504,14 @@ class _HeroSection extends StatelessWidget {
 
 class _PortalSection extends StatelessWidget {
   final bool isWide;
+  final VoidCallback onOpenAdminPortal;
+  final VoidCallback onOpenManagerPortal;
 
-  const _PortalSection({required this.isWide});
+  const _PortalSection({
+    required this.isWide,
+    required this.onOpenAdminPortal,
+    required this.onOpenManagerPortal,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -482,9 +527,7 @@ class _PortalSection extends StatelessWidget {
           'Subscription oversight',
           'Reports and actions',
         ],
-        onPressed: () => Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const AdminLoginScreen())),
+        onPressed: onOpenAdminPortal,
       ),
       _PortalCard(
         title: 'Mall Manager',
@@ -497,9 +540,7 @@ class _PortalSection extends StatelessWidget {
           'Barcode workflows',
           'Billing settings',
         ],
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const MallManagerLoginScreen()),
-        ),
+        onPressed: onOpenManagerPortal,
       ),
     ];
 
@@ -683,8 +724,12 @@ class _PricingSection extends StatelessWidget {
 
 class _CtaSection extends StatelessWidget {
   final bool isWide;
+  final VoidCallback onOpenManagerPortal;
 
-  const _CtaSection({required this.isWide});
+  const _CtaSection({
+    required this.isWide,
+    required this.onOpenManagerPortal,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -704,9 +749,7 @@ class _CtaSection extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         OutlinedButton(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const MallManagerLoginScreen()),
-          ),
+          onPressed: onOpenManagerPortal,
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.white,
             side: const BorderSide(color: Colors.white),

@@ -17,7 +17,8 @@ class MallManagerProvider extends ChangeNotifier {
   MallManagerProfile? _profile;
   List<MallProduct> _products = [];
   MallBillingSettings _billingSettings = const MallBillingSettings();
-  bool _otpSent = false;
+  bool _signupOtpSent = false;
+  bool _passwordResetOtpSent = false;
   DateTime? _otpExpiresAt;
   String? _pendingManagerEmail;
   String? _debugOtp;
@@ -30,7 +31,8 @@ class MallManagerProvider extends ChangeNotifier {
   MallManagerProfile? get profile => _profile;
   List<MallProduct> get products => _products;
   MallBillingSettings get billingSettings => _billingSettings;
-  bool get otpSent => _otpSent;
+  bool get signupOtpSent => _signupOtpSent;
+  bool get passwordResetOtpSent => _passwordResetOtpSent;
   DateTime? get otpExpiresAt => _otpExpiresAt;
   String? get pendingManagerEmail => _pendingManagerEmail;
   String? get debugOtp => _debugOtp;
@@ -185,17 +187,24 @@ class MallManagerProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> requestManagerEmailOtp({
+  Future<bool> requestManagerSignupOtp({
     required String email,
+    required String password,
+    required String confirmPassword,
   }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final result = await _apiService.requestLoginOtp(email: email);
+      final result = await _apiService.requestSignupOtp(
+        email: email,
+        password: password,
+        confirmPassword: confirmPassword,
+      );
       _pendingManagerEmail = email.trim().toLowerCase();
-      _otpSent = true;
+      _signupOtpSent = true;
+      _passwordResetOtpSent = false;
       _otpExpiresAt = result.expiresAtUtc;
       _debugOtp = result.debugOtp;
       _isLoading = false;
@@ -209,7 +218,7 @@ class MallManagerProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> verifyManagerEmailOtp({
+  Future<bool> verifyManagerSignupOtp({
     required String email,
     required String otp,
   }) async {
@@ -218,7 +227,7 @@ class MallManagerProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _apiService.verifyLoginOtp(
+      final result = await _apiService.verifySignupOtp(
         email: email,
         otp: otp,
       );
@@ -229,12 +238,104 @@ class MallManagerProvider extends ChangeNotifier {
       _currentManagerEmail = result.email;
       _profile = result.profile;
       _billingSettings = result.billingSettings;
-      _otpSent = false;
+      _signupOtpSent = false;
+      _passwordResetOtpSent = false;
       _otpExpiresAt = null;
       _pendingManagerEmail = null;
       _debugOtp = null;
 
       await _fetchProducts();
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> loginWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _apiService.login(email: email, password: password);
+      _accessToken = result.token;
+      _currentMallId = result.mallId;
+      _currentManagerId = result.managerId;
+      _currentManagerEmail = result.email;
+      _profile = result.profile;
+      _billingSettings = result.billingSettings;
+      _signupOtpSent = false;
+      _passwordResetOtpSent = false;
+      _otpExpiresAt = null;
+      _pendingManagerEmail = null;
+      _debugOtp = null;
+      await _fetchProducts();
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> requestManagerPasswordResetOtp({
+    required String email,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _apiService.requestPasswordResetOtp(email: email);
+      _pendingManagerEmail = email.trim().toLowerCase();
+      _signupOtpSent = false;
+      _passwordResetOtpSent = true;
+      _otpExpiresAt = result.expiresAtUtc;
+      _debugOtp = result.debugOtp;
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> resetManagerPassword({
+    required String email,
+    required String otp,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _apiService.resetPassword(
+        email: email,
+        otp: otp,
+        newPassword: newPassword,
+        confirmPassword: confirmPassword,
+      );
+      _passwordResetOtpSent = false;
+      _signupOtpSent = false;
+      _otpExpiresAt = null;
+      _pendingManagerEmail = null;
+      _debugOtp = null;
       _isLoading = false;
       notifyListeners();
       return true;
@@ -383,7 +484,8 @@ class MallManagerProvider extends ChangeNotifier {
     _profile = null;
     _products = [];
     _billingSettings = const MallBillingSettings();
-    _otpSent = false;
+    _signupOtpSent = false;
+    _passwordResetOtpSent = false;
     _otpExpiresAt = null;
     _pendingManagerEmail = null;
     _debugOtp = null;

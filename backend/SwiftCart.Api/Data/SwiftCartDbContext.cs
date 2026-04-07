@@ -10,6 +10,7 @@ public sealed class SwiftCartDbContext(DbContextOptions<SwiftCartDbContext> opti
     public DbSet<MallEntity> Malls => Set<MallEntity>();
     public DbSet<MallManagerEntity> MallManagers => Set<MallManagerEntity>();
     public DbSet<MallManagerEmailOtpEntity> MallManagerEmailOtps => Set<MallManagerEmailOtpEntity>();
+    public DbSet<MallManagerPasswordResetOtpEntity> MallManagerPasswordResetOtps => Set<MallManagerPasswordResetOtpEntity>();
     public DbSet<UserProfileEntity> UserProfiles => Set<UserProfileEntity>();
     public DbSet<UserEmailOtpEntity> UserEmailOtps => Set<UserEmailOtpEntity>();
     public DbSet<UserPasswordResetOtpEntity> UserPasswordResetOtps => Set<UserPasswordResetOtpEntity>();
@@ -148,6 +149,30 @@ public sealed class SwiftCartDbContext(DbContextOptions<SwiftCartDbContext> opti
             entity.Property(x => x.ManagerId)
                 .HasColumnName("manager_id")
                 .HasMaxLength(40);
+            entity.Property(x => x.PendingPasswordHash)
+                .HasColumnName("pending_password_hash")
+                .HasMaxLength(128);
+            entity.Property(x => x.OtpCode)
+                .HasColumnName("otp_code")
+                .HasMaxLength(16);
+            entity.Property(x => x.Attempts)
+                .HasColumnName("attempts");
+            entity.Property(x => x.ExpiresAtUtc)
+                .HasColumnName("expires_at_utc");
+            entity.Property(x => x.CreatedAtUtc)
+                .HasColumnName("created_at_utc");
+            entity.Property(x => x.UpdatedAtUtc)
+                .HasColumnName("updated_at_utc");
+        });
+
+        modelBuilder.Entity<MallManagerPasswordResetOtpEntity>(entity =>
+        {
+            entity.ToTable("mall_manager_password_reset_otps");
+            entity.HasKey(x => x.Email);
+
+            entity.Property(x => x.Email)
+                .HasColumnName("email")
+                .HasMaxLength(160);
             entity.Property(x => x.OtpCode)
                 .HasColumnName("otp_code")
                 .HasMaxLength(16);

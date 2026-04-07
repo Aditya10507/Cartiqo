@@ -40,13 +40,19 @@ class MallManagerOtpRequestResult {
 class MallManagerApiService {
   Uri _uri(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
 
-  Future<MallManagerOtpRequestResult> requestLoginOtp({
+  Future<MallManagerOtpRequestResult> requestSignupOtp({
     required String email,
+    required String password,
+    required String confirmPassword,
   }) async {
     final response = await http.post(
-      _uri('/api/auth/mall-manager/request-otp'),
+      _uri('/api/auth/mall-manager/register/request-otp'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email.trim().toLowerCase()}),
+      body: jsonEncode({
+        'email': email.trim().toLowerCase(),
+        'password': password,
+        'confirmPassword': confirmPassword,
+      }),
     );
 
     final body = _decodeJson(response.body);
@@ -64,12 +70,12 @@ class MallManagerApiService {
     );
   }
 
-  Future<MallManagerLoginResult> verifyLoginOtp({
+  Future<MallManagerLoginResult> verifySignupOtp({
     required String email,
     required String otp,
   }) async {
     final response = await http.post(
-      _uri('/api/auth/mall-manager/verify-otp'),
+      _uri('/api/auth/mall-manager/register/verify-otp'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'email': email.trim().toLowerCase(),
@@ -85,6 +91,78 @@ class MallManagerApiService {
     }
 
     return _toLoginResult(body);
+  }
+
+  Future<MallManagerLoginResult> login({
+    required String email,
+    required String password,
+  }) async {
+    final response = await http.post(
+      _uri('/api/auth/mall-manager/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email.trim().toLowerCase(),
+        'password': password,
+      }),
+    );
+
+    final body = _decodeJson(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(
+        _extractMessage(body, fallback: 'Manager sign in failed.'),
+      );
+    }
+
+    return _toLoginResult(body);
+  }
+
+  Future<MallManagerOtpRequestResult> requestPasswordResetOtp({
+    required String email,
+  }) async {
+    final response = await http.post(
+      _uri('/api/auth/mall-manager/password/request-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email.trim().toLowerCase()}),
+    );
+
+    final body = _decodeJson(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(
+        _extractMessage(body, fallback: 'Unable to send password reset OTP.'),
+      );
+    }
+
+    final map = Map<String, dynamic>.from(body as Map);
+    return MallManagerOtpRequestResult(
+      message: (map['message'] ?? 'Password reset code sent.').toString(),
+      expiresAtUtc: _parseDateTime(map['expiresAtUtc']),
+      debugOtp: map['debugOtp']?.toString(),
+    );
+  }
+
+  Future<void> resetPassword({
+    required String email,
+    required String otp,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    final response = await http.post(
+      _uri('/api/auth/mall-manager/password/reset'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'email': email.trim().toLowerCase(),
+        'otp': otp.trim(),
+        'newPassword': newPassword,
+        'confirmPassword': confirmPassword,
+      }),
+    );
+
+    final body = _decodeJson(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(
+        _extractMessage(body, fallback: 'Unable to reset password.'),
+      );
+    }
   }
 
   MallManagerLoginResult _toLoginResult(dynamic body) {

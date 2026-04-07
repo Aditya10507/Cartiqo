@@ -5,12 +5,14 @@ import '../models/cart_item.dart';
 import '../models/mall_product.dart';
 import '../providers/cart_provider.dart';
 import '../services/storefront_api_service.dart';
-import 'cart_screen.dart';
 import 'barcode_scanner_screen.dart';
+import 'cart_screen.dart';
 import 'product_search_screen.dart';
+import 'product_text_match_screen.dart';
 
 class ScanProductScreen extends StatefulWidget {
   final String mallId;
+
   const ScanProductScreen({super.key, required this.mallId});
 
   @override
@@ -20,8 +22,8 @@ class ScanProductScreen extends StatefulWidget {
 class _ScanProductScreenState extends State<ScanProductScreen> {
   final _storefrontApiService = StorefrontApiService();
   final _barcodeCtrl = TextEditingController();
-  bool _loading = false;
 
+  bool _loading = false;
   MallProduct? _product;
   String? _message;
 
@@ -36,17 +38,38 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
       context,
       MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
     );
-    if (scanned == null) return;
+    if (scanned == null || !mounted) {
+      return;
+    }
 
     _barcodeCtrl.text = scanned;
     await _findProduct();
+  }
+
+  Future<void> _findByPackText() async {
+    final matchedProduct = await Navigator.push<MallProduct>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductTextMatchScreen(mallId: widget.mallId),
+      ),
+    );
+
+    if (matchedProduct == null) {
+      return;
+    }
+
+    setState(() {
+      _product = matchedProduct;
+      _barcodeCtrl.text = matchedProduct.barcode;
+      _message = 'Recommended product added to cart.';
+    });
   }
 
   Future<void> _findProduct() async {
     final barcode = _barcodeCtrl.text.trim();
     if (barcode.isEmpty) {
       setState(() {
-        _message = "Enter a barcode";
+        _message = 'Enter a barcode';
         _product = null;
       });
       return;
@@ -68,524 +91,302 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
         _message = null;
       });
     } catch (e) {
-      setState(() => _message = e.toString().replaceFirst('Exception: ', ''));
+      setState(() {
+        _message = e.toString().replaceFirst('Exception: ', '');
+      });
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final p = _product;
+    final product = _product;
 
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.grey[900]!,
-              Colors.grey[800]!,
-            ],
+      backgroundColor: const Color(0xFFF5F6F8),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: const Text('Scan Items'),
+        actions: [
+          IconButton(
+            onPressed: _scanBarcode,
+            icon: const Icon(Icons.qr_code_scanner_outlined),
+            tooltip: 'Scan barcode',
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Modern AppBar
-              _buildModernAppBar(context),
-              
-              // Main Content
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Title
-                      Text(
-                        'Scan Items',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Enter barcode or scan to find products',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Barcode Input with Camera Button
-                      _buildBarcodeInputSection(),
-                      const SizedBox(height: 20),
-
-                      // Browse Products Button
-                      _buildBrowseButton(),
-                      const SizedBox(height: 16),
-
-                      // Find Product Button
-                      _buildFindProductButton(),
-                      const SizedBox(height: 24),
-
-                      // Message Display
-                      if (_message != null) _buildMessageWidget(),
-
-                      // Product Card with Modern Design
-                      if (p != null) ...[
-                        _buildProductCard(p),
-                      ],
-                    ],
-                  ),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ProductSearchScreen(mallId: widget.mallId),
                 ),
+              );
+            },
+            icon: const Icon(Icons.search_outlined),
+            tooltip: 'Browse products',
+          ),
+          Consumer<CartProvider>(
+            builder: (context, cart, _) {
+              final count = cart.totalItemsCount;
+              return Stack(
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CartScreen(mallId: widget.mallId),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.shopping_cart_outlined),
+                    tooltip: 'Cart',
+                  ),
+                  if (count > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.mallId,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Build modern AppBar with gradient
-  Widget _buildModernAppBar(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.grey[850]!,
-            Colors.grey[900]!,
-          ],
-        ),
-        border: Border(
-          bottom: BorderSide(
-            color: Colors.cyan.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
+              const SizedBox(height: 16),
+              _buildSection(
+                title: 'Enter Barcode',
+                child: Column(
                   children: [
-                    const Icon(Icons.store, color: Colors.cyan),
-                    const SizedBox(width: 8),
-                    Text(
-                      widget.mallId,
-                      style: const TextStyle(
-                        color: Colors.cyan,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                    TextField(
+                      controller: _barcodeCtrl,
+                      keyboardType: TextInputType.number,
+                      onSubmitted: (_) => _findProduct(),
+                      decoration: InputDecoration(
+                        labelText: 'Barcode',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        suffixIcon: _barcodeCtrl.text.isEmpty
+                            ? null
+                            : IconButton(
+                                onPressed: () {
+                                  _barcodeCtrl.clear();
+                                  setState(() {
+                                    _message = null;
+                                    _product = null;
+                                  });
+                                },
+                                icon: const Icon(Icons.close),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _loading ? null : _findProduct,
+                        child: _loading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text('Find Product'),
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
-            Row(
-              children: [
-                _buildIconButton(
-                  icon: Icons.document_scanner_outlined,
-                  onPress: _scanBarcode,
-                  tooltip: 'Scan',
-                ),
-                _buildIconButton(
-                  icon: Icons.search_outlined,
-                  onPress: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ProductSearchScreen(mallId: widget.mallId),
-                      ),
-                    );
-                  },
-                  tooltip: 'Search',
-                ),
-                _buildCartIconButton(context),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Build barcode input with camera button
-  Widget _buildBarcodeInputSection() {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: Colors.cyan.withOpacity(0.4),
-                width: 2,
               ),
-              color: Colors.grey[850]?.withOpacity(0.5),
-            ),
-            child: TextField(
-              controller: _barcodeCtrl,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white),
-              onSubmitted: (_) => _findProduct(),
-              decoration: InputDecoration(
-                labelText: 'Barcode',
-                labelStyle: TextStyle(color: Colors.cyan.withOpacity(0.7)),
-                hintText: 'Enter or scan barcode',
-                hintStyle: TextStyle(color: Colors.white38),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                suffixIcon: _barcodeCtrl.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.cyan),
-                        onPressed: () {
-                          _barcodeCtrl.clear();
-                          setState(() {
-                            _product = null;
-                            _message = null;
-                          });
-                        },
-                      )
-                    : null,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.cyan.withOpacity(0.8),
-                Colors.blue.withOpacity(0.6),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.cyan.withOpacity(0.3),
-                blurRadius: 12,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _scanBarcode,
-              borderRadius: BorderRadius.circular(14),
-              child: const Padding(
-                padding: EdgeInsets.all(12),
-                child: Icon(Icons.photo_camera, color: Colors.white),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Build browse products button
-  Widget _buildBrowseButton() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.blue.withOpacity(0.3),
-            Colors.purple.withOpacity(0.2),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: Colors.blue.withOpacity(0.4),
-          width: 1,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ProductSearchScreen(mallId: widget.mallId),
-              ),
-            );
-          },
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.manage_search, color: Colors.cyan),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Browse Products',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Search & Filter by category',
-                        style: TextStyle(
-                          color: Colors.white60,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+              const SizedBox(height: 14),
+              _buildSection(
+                title: 'Scan Barcode',
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _scanBarcode,
+                    icon: const Icon(Icons.qr_code_scanner_outlined),
+                    label: const Text('Open Scanner'),
                   ),
                 ),
-                Icon(Icons.arrow_forward, color: Colors.cyan.withOpacity(0.7)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Build find product button with loading state
-  Widget _buildFindProductButton() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: _loading
-            ? LinearGradient(
-                colors: [
-                  Colors.grey[700]!,
-                  Colors.grey[600]!,
-                ],
-              )
-            : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.greenAccent.withOpacity(0.8),
-                  Colors.cyan.withOpacity(0.6),
-                ],
               ),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: _loading
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.greenAccent.withOpacity(0.3),
-                  blurRadius: 12,
-                  spreadRadius: 1,
+              const SizedBox(height: 14),
+              _buildSection(
+                title: 'Capture Product',
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _findByPackText,
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: const Text('Open Camera'),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _buildSection(
+                title: 'Browse Products',
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ProductSearchScreen(mallId: widget.mallId),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.search_outlined),
+                    label: const Text('Browse'),
+                  ),
+                ),
+              ),
+              if (_message != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE4E7EC)),
+                  ),
+                  child: Text(_message!),
                 ),
               ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: _loading ? null : _findProduct,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: _loading
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation(Colors.white),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'Finding Product...',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    )
-                  : const Text(
-                      'Find Product',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      ),
-                    ),
-            ),
+              if (product != null) ...[
+                const SizedBox(height: 16),
+                _buildProductCard(product),
+              ],
+            ],
           ),
         ),
       ),
     );
   }
 
-  /// Build message widget with better styling
-  Widget _buildMessageWidget() {
-    final isError = _message!.toLowerCase().contains('not found') ||
-        _message!.toLowerCase().contains('error');
-
+  Widget _buildSection({required String title, required Widget child}) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isError
-              ? [
-                  Colors.red.withOpacity(0.2),
-                  Colors.orange.withOpacity(0.1),
-                ]
-              : [
-                  Colors.yellowAccent.withOpacity(0.2),
-                  Colors.amber.withOpacity(0.1),
-                ],
-        ),
-        border: Border.all(
-          color: isError
-              ? Colors.red.withOpacity(0.4)
-              : Colors.amber.withOpacity(0.4),
-          width: 1,
-        ),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
       ),
-      child: Row(
-        children: [
-          Icon(
-            isError ? Icons.error_outline : Icons.info_outline,
-            color: isError ? Colors.red : Colors.amber,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              _message!,
-              style: TextStyle(
-                color: isError ? Colors.red.shade200 : Colors.amber.shade200,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Build modern product card
-  Widget _buildProductCard(MallProduct p) {
-    final price = p.price.round();
-    final unit = p.unit;
-    final name = p.name;
-    final brand = p.brand;
-    final stock = p.stock;
-    final imageUrl = p.imageUrl.trim();
-    final cartQty = context.watch<CartProvider>().quantityFor(p.barcode);
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.grey[850]!.withOpacity(0.8),
-            Colors.grey[900]!.withOpacity(0.8),
-          ],
-        ),
-        border: Border.all(
-          color: Colors.greenAccent.withOpacity(0.3),
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.greenAccent.withOpacity(0.2),
-            blurRadius: 20,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(20),
-      margin: const EdgeInsets.only(bottom: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (imageUrl.isNotEmpty) ...[
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductCard(MallProduct product) {
+    final cartQty = context.watch<CartProvider>().quantityFor(product.barcode);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (product.imageUrl.trim().isNotEmpty) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(14),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: Image.network(
-                  imageUrl,
+                  product.imageUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.black.withOpacity(0.2),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.broken_image_outlined,
-                        color: Colors.white70,
-                        size: 34,
-                      ),
-                    );
-                  },
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: const Color(0xFFF2F4F7),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.broken_image_outlined),
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
           ],
-          // Product Header
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name,
+                      product.name,
                       style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
                         fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      brand,
-                      style: TextStyle(
-                        color: Colors.cyan.withOpacity(0.8),
-                        fontSize: 12,
+                      product.brand,
+                      style: const TextStyle(
+                        color: Colors.black54,
+                        fontSize: 14,
                       ),
                     ),
                   ],
@@ -597,128 +398,67 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.greenAccent.withOpacity(0.3),
-                      Colors.cyan.withOpacity(0.2),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.greenAccent.withOpacity(0.5),
-                    width: 1,
-                  ),
+                  color: const Color(0xFFF2F4F7),
+                  borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text(
-                  '✓ Found',
+                child: const Text(
+                  'Found',
                   style: TextStyle(
-                    color: Colors.greenAccent,
+                    color: Colors.black87,
                     fontWeight: FontWeight.w600,
-                    fontSize: 12,
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-
-          // Product Details Grid
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.grey[900]?.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.05),
-                width: 1,
-              ),
+              color: const Color(0xFFF8F9FB),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildDetailColumn('Price', '₹$price', Colors.greenAccent),
+                _buildDetailColumn('Price', 'Rs ${product.price.round()}'),
                 _buildDivider(),
-                _buildDetailColumn('Unit', unit, Colors.cyan),
+                _buildDetailColumn('Unit', product.unit),
                 _buildDivider(),
-                _buildDetailColumn('Stock', '$stock', Colors.orangeAccent),
+                _buildDetailColumn('Stock', '${product.stock}'),
               ],
             ),
           ),
           const SizedBox(height: 16),
-
           LayoutBuilder(
             builder: (context, constraints) {
-              final useVerticalLayout = constraints.maxWidth < 560;
-              final addButton = Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.greenAccent.withOpacity(0.9),
-                      Colors.cyan.withOpacity(0.7),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.greenAccent.withOpacity(0.4),
-                      blurRadius: 16,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => _addToCart(context, p),
-                    borderRadius: BorderRadius.circular(12),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: 14,
-                        horizontal: 16,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.shopping_cart, color: Colors.white),
-                          SizedBox(width: 12),
-                          Text(
-                            'Add to Cart',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+              final stacked = constraints.maxWidth < 420;
+              final addButton = SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => _addToCart(context, product),
+                  icon: const Icon(Icons.shopping_cart_outlined),
+                  label: const Text('Add to Cart'),
                 ),
               );
 
-              final quantityControl = Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              final quantityBox = Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.grey[900]?.withOpacity(0.55),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.08),
-                  ),
+                  color: const Color(0xFFF8F9FB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE4E7EC)),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
                       onPressed: cartQty > 0
-                          ? () => context.read<CartProvider>().decrement(p.barcode)
+                          ? () => context
+                              .read<CartProvider>()
+                              .decrement(product.barcode)
                           : null,
-                      icon: const Icon(
-                        Icons.remove_circle_outline,
-                        color: Colors.white,
-                      ),
+                      icon: const Icon(Icons.remove_circle_outline),
                     ),
                     SizedBox(
                       width: 28,
@@ -726,30 +466,30 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
                         '$cartQty',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
                           fontSize: 16,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                     IconButton(
-                      onPressed: () => _addToCart(context, p, showMessage: false),
-                      icon: const Icon(
-                        Icons.add_circle_outline,
-                        color: Colors.white,
-                      ),
+                      onPressed: () =>
+                          _addToCart(context, product, showMessage: false),
+                      icon: const Icon(Icons.add_circle_outline),
                     ),
                   ],
                 ),
               );
 
-              if (useVerticalLayout) {
+              if (stacked) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     addButton,
                     const SizedBox(height: 12),
-                    quantityControl,
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: quantityBox,
+                    ),
                   ],
                 );
               }
@@ -758,7 +498,7 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
                 children: [
                   Expanded(child: addButton),
                   const SizedBox(width: 12),
-                  quantityControl,
+                  quantityBox,
                 ],
               );
             },
@@ -768,161 +508,56 @@ class _ScanProductScreenState extends State<ScanProductScreen> {
     );
   }
 
-  /// Helper: Detail Column
-  Widget _buildDetailColumn(String label, String value, Color color) {
+  Widget _buildDetailColumn(String label, String value) {
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           label,
-          style: TextStyle(
-            color: Colors.white60,
-            fontSize: 11,
+          style: const TextStyle(
+            color: Colors.black54,
+            fontSize: 12,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           value,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
+          style: const TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
     );
   }
 
-  /// Helper: Divider
   Widget _buildDivider() {
     return Container(
-      height: 30,
+      height: 28,
       width: 1,
-      color: Colors.white.withOpacity(0.1),
+      color: const Color(0xFFE4E7EC),
     );
   }
 
-  /// Helper: Icon Button
-  Widget _buildIconButton({
-    required IconData icon,
-    required VoidCallback onPress,
-    required String tooltip,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPress,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Icon(icon, color: Colors.cyan, size: 22),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Helper: Cart Icon Button with Badge
-  Widget _buildCartIconButton(BuildContext context) {
-    return Consumer<CartProvider>(
-      builder: (context, cart, _) {
-        final count = cart.totalItemsCount;
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            Tooltip(
-              message: 'Cart',
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CartScreen(mallId: widget.mallId),
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(Icons.shopping_cart, color: Colors.cyan, size: 22),
-                  ),
-                ),
-              ),
-            ),
-            if (count > 0)
-              Positioned(
-                right: 4,
-                top: 4,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.red.withOpacity(0.5),
-                        blurRadius: 4,
-                      ),
-                    ],
-                  ),
-                  child: Text(
-                    '$count',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  /// Add to cart helper
-  void _addToCart(BuildContext context, MallProduct p, {bool showMessage = true}) {
-    final cart = context.read<CartProvider>();
+  void _addToCart(BuildContext context, MallProduct product,
+      {bool showMessage = true}) {
     final item = CartItem(
-      productId: p.productId,
-      name: p.name,
-      barcode: p.barcode,
-      price: p.price.round(),
-      unit: p.unit,
-      imageUrl: p.imageUrl,
+      productId: product.productId,
+      name: product.name,
+      barcode: product.barcode,
+      price: product.price.round(),
+      unit: product.unit,
+      imageUrl: product.imageUrl,
     );
-    cart.addOrIncrement(item);
+
+    context.read<CartProvider>().addOrIncrement(item);
 
     if (showMessage) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white),
-              const SizedBox(width: 12),
-              Expanded(child: Text('${item.name} added to cart')),
-            ],
-          ),
-          backgroundColor: Colors.green,
+          content: Text('${item.name} added to cart'),
           duration: const Duration(seconds: 2),
         ),
       );
-    }
-
-    if (showMessage) {
-      _barcodeCtrl.clear();
-      setState(() {
-        _product = null;
-        _message = null;
-      });
     }
   }
 }
