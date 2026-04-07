@@ -33,8 +33,14 @@ class UserAuthProvider extends ChangeNotifier {
   String? _debugOtp;
   DateTime? _otpExpiresAt;
 
-  UserAuthProvider() {
-    _restoreSession();
+  UserAuthProvider({
+    AppUserSession? initialSession,
+    bool isReady = false,
+  }) : _currentUser = initialSession,
+       _isReady = isReady {
+    if (!_isReady) {
+      _restoreSession();
+    }
   }
 
   AppUserSession? get currentUser => _currentUser;

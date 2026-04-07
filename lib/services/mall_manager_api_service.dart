@@ -37,6 +37,22 @@ class MallManagerOtpRequestResult {
   });
 }
 
+class MallManagerBulkImportResult {
+  final int totalRows;
+  final int createdCount;
+  final int updatedCount;
+  final int failedCount;
+  final List<String> errors;
+
+  const MallManagerBulkImportResult({
+    required this.totalRows,
+    required this.createdCount,
+    required this.updatedCount,
+    required this.failedCount,
+    required this.errors,
+  });
+}
+
 class MallManagerApiService {
   Uri _uri(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
 
@@ -293,6 +309,38 @@ class MallManagerApiService {
     return MallProduct.fromMap(Map<String, dynamic>.from(body as Map));
   }
 
+  Future<MallManagerBulkImportResult> importProducts({
+    required String token,
+    required String mallId,
+    required List<MallProduct> products,
+  }) async {
+    final response = await http.post(
+      _uri('/api/malls/${mallId.trim().toUpperCase()}/products/bulk-import'),
+      headers: _authHeaders(token),
+      body: jsonEncode({
+        'products': products.map(_productToMap).toList(),
+      }),
+    );
+
+    final body = _decodeJson(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(
+        _extractMessage(body, fallback: 'Failed to import products.'),
+      );
+    }
+
+    final map = Map<String, dynamic>.from(body as Map);
+    return MallManagerBulkImportResult(
+      totalRows: _parseInt(map['totalRows']),
+      createdCount: _parseInt(map['createdCount']),
+      updatedCount: _parseInt(map['updatedCount']),
+      failedCount: _parseInt(map['failedCount']),
+      errors: ((map['errors'] as List?) ?? const [])
+          .map((item) => item.toString())
+          .toList(),
+    );
+  }
+
   Future<MallProduct> updateProduct({
     required String token,
     required String mallId,
@@ -513,6 +561,16 @@ class MallManagerApiService {
       return null;
     }
     return DateTime.tryParse(value.toString())?.toUtc();
+  }
+
+  int _parseInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   dynamic _decodeJson(String body) {

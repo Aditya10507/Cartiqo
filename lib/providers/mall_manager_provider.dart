@@ -393,6 +393,37 @@ class MallManagerProvider extends ChangeNotifier {
     }
   }
 
+  Future<MallManagerBulkImportResult?> importProducts(
+    List<MallProduct> products,
+  ) async {
+    if (_currentMallId == null || _accessToken == null) {
+      _error = 'No mall selected. Please login again.';
+      notifyListeners();
+      return null;
+    }
+
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final result = await _apiService.importProducts(
+        token: _requireAccessToken(),
+        mallId: _currentMallId!,
+        products: products,
+      );
+      await _fetchProducts();
+      _isLoading = false;
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _error = 'Error importing products: $e';
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
   Future<bool> deleteProduct(String productId, String barcode) async {
     if (_currentMallId == null || _accessToken == null) return false;
 

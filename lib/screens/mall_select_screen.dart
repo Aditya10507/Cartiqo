@@ -6,9 +6,9 @@ import '../providers/user_auth_provider.dart';
 import '../services/storefront_api_service.dart';
 import '../app/app.dart';
 import '../widgets/swiftcart_logo.dart';
-import 'scan_product_screen.dart';
-import 'mall_qr_scanner_screen.dart';
-import 'user_profile_screen.dart';
+import 'scan_product_screen.dart' deferred as scan_product;
+import 'mall_qr_scanner_screen.dart' deferred as mall_qr_scanner;
+import 'user_profile_screen.dart' deferred as user_profile;
 
 class MallSelectScreen extends StatefulWidget {
   const MallSelectScreen({super.key});
@@ -52,9 +52,13 @@ class _MallSelectScreenState extends State<MallSelectScreen> {
       await _storefrontApiService.fetchBillingSettings(mallId);
 
       if (!mounted) return;
+      await scan_product.loadLibrary();
+      if (!mounted) return;
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => ScanProductScreen(mallId: mallId)),
+        MaterialPageRoute(
+          builder: (_) => scan_product.ScanProductScreen(mallId: mallId),
+        ),
       );
     } catch (e) {
       setState(
@@ -66,9 +70,13 @@ class _MallSelectScreenState extends State<MallSelectScreen> {
   }
 
   Future<void> _scanMallQr() async {
+    await mall_qr_scanner.loadLibrary();
+    if (!mounted) return;
     final scannedMallId = await Navigator.push<String>(
       context,
-      MaterialPageRoute(builder: (_) => const MallQrScannerScreen()),
+      MaterialPageRoute(
+        builder: (_) => mall_qr_scanner.MallQrScannerScreen(),
+      ),
     );
 
     if (scannedMallId == null) return;
@@ -124,11 +132,13 @@ class _MallSelectScreenState extends State<MallSelectScreen> {
                       ),
                     ),
                     IconButton.filledTonal(
-                      onPressed: () {
+                      onPressed: () async {
+                        await user_profile.loadLibrary();
+                        if (!mounted) return;
                         Navigator.push(
-                          context,
+                          this.context,
                           MaterialPageRoute(
-                            builder: (_) => const UserProfileScreen(),
+                            builder: (_) => user_profile.UserProfileScreen(),
                           ),
                         );
                       },
@@ -145,7 +155,7 @@ class _MallSelectScreenState extends State<MallSelectScreen> {
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                     borderRadius: BorderRadius.circular(28),
                     border: Border.all(color: Colors.white),
                     boxShadow: const [
@@ -315,11 +325,14 @@ class _MallSelectScreenState extends State<MallSelectScreen> {
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
-              context.read<CartProvider>().clear();
-              await context.read<UserAuthProvider>().logout();
+              final navigator = Navigator.of(context);
+              final cartProvider = context.read<CartProvider>();
+              final authProvider = context.read<UserAuthProvider>();
+              navigator.pop();
+              cartProvider.clear();
+              await authProvider.logout();
               if (!mounted) return;
-              Navigator.of(context).pushReplacement(
+              navigator.pushReplacement(
                 MaterialPageRoute(builder: (_) => const AppModeSelector()),
               );
             },

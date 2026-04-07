@@ -4,8 +4,8 @@ import 'package:provider/provider.dart';
 import '../app/app.dart';
 import '../providers/admin_provider.dart';
 import '../widgets/swiftcart_logo.dart';
-import 'admin_dashboard_screen.dart';
-import 'web_admin_dashboard_screen.dart';
+import 'admin_dashboard_screen.dart' deferred as admin_dashboard;
+import 'web_admin_dashboard_screen.dart' deferred as web_admin_dashboard;
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -46,10 +46,17 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     if (!mounted) return;
 
     if (success) {
+      if (kIsWeb) {
+        await web_admin_dashboard.loadLibrary();
+      } else {
+        await admin_dashboard.loadLibrary();
+      }
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) =>
-              kIsWeb ? const WebAdminDashboardScreen() : const AdminDashboardScreen(),
+          builder: (_) => kIsWeb
+              ? web_admin_dashboard.WebAdminDashboardScreen()
+              : admin_dashboard.AdminDashboardScreen(),
         ),
       );
     } else {
@@ -63,13 +70,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        // Navigate to home instead of going back
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const AppModeSelector()),
         );
-        return false; // Prevent default back behavior
       },
       child: Scaffold(
         body: Container(
@@ -206,7 +213,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.white24),
                   ),

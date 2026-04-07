@@ -94,6 +94,96 @@ public sealed class ProductsController(SwiftCartDbContext dbContext) : Controlle
         return CreatedAtAction(nameof(GetByBarcode), new { mallId = normalizedMallId, barcode }, ProductDto.FromEntity(entity));
     }
 
+    [HttpPost("bulk-import")]
+    public async Task<ActionResult<BulkImportProductsResult>> BulkImport(
+        string mallId,
+        BulkImportProductsRequest request)
+    {
+        var normalizedMallId = mallId.Trim().ToUpperInvariant();
+        if (!CanAccessMall(normalizedMallId))
+        {
+            return Forbid();
+        }
+
+        var products = request.Products ?? [];
+        if (products.Count == 0)
+        {
+            return BadRequest(new { message = "At least one product is required for import." });
+        }
+
+        var result = new BulkImportProductsResult
+        {
+            TotalRows = products.Count,
+        };
+        var seenBarcodesInImport = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (product, index) in products.Select((value, i) => (value, i)))
+        {
+            var rowNumber = index + 1;
+            try
+            {
+                var validationError = ValidateImportProduct(product);
+                if (validationError is not null)
+                {
+                    result.Errors.Add($"Row {rowNumber}: {validationError}");
+                    result.FailedCount++;
+                    continue;
+                }
+
+                var barcode = product.Barcode.Trim();
+                if (string.IsNullOrWhiteSpace(barcode))
+                {
+                    barcode = await GenerateBarcode(normalizedMallId);
+                }
+                else if (!seenBarcodesInImport.Add(barcode))
+                {
+                    result.Errors.Add($"Row {rowNumber}: Duplicate barcode {barcode} in this upload.");
+                    result.FailedCount++;
+                    continue;
+                }
+
+                var existingBarcode = await dbContext.Barcodes.FirstOrDefaultAsync(
+                    x => x.MallId == normalizedMallId && x.Barcode == barcode);
+
+                if (existingBarcode is not null)
+                {
+                    var existingProduct = await dbContext.Products.FirstOrDefaultAsync(
+                        x => x.MallId == normalizedMallId && x.ProductId == existingBarcode.ProductId);
+
+                    if (existingProduct is null)
+                    {
+                        result.Errors.Add($"Row {rowNumber}: Existing barcode mapping is invalid for {barcode}.");
+                        result.FailedCount++;
+                        continue;
+                    }
+
+                    UpdateProductEntity(existingProduct, product, barcode);
+                    UpdateBarcodeEntity(existingBarcode, existingProduct);
+                    result.UpdatedCount++;
+                    continue;
+                }
+
+                var productId = string.IsNullOrWhiteSpace(product.ProductId)
+                    ? Guid.NewGuid().ToString("N")
+                    : product.ProductId.Trim();
+                var entity = MapToProductEntity(normalizedMallId, productId, product, barcode);
+                var barcodeEntity = MapToBarcodeEntity(normalizedMallId, entity);
+
+                dbContext.Products.Add(entity);
+                dbContext.Barcodes.Add(barcodeEntity);
+                result.CreatedCount++;
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add($"Row {rowNumber}: {ex.Message}");
+                result.FailedCount++;
+            }
+        }
+
+        await dbContext.SaveChangesAsync();
+        return Ok(result);
+    }
+
     [HttpPut("{productId}")]
     public async Task<ActionResult<ProductDto>> Update(
         string mallId,
@@ -269,6 +359,25 @@ public sealed class ProductsController(SwiftCartDbContext dbContext) : Controlle
         };
     }
 
+    private static void UpdateProductEntity(
+        ProductEntity entity,
+        UpsertProductRequest request,
+        string barcode)
+    {
+        entity.Name = request.Name.Trim();
+        entity.Barcode = barcode;
+        entity.ImageUrl = request.ImageUrl.Trim();
+        entity.ImageSourcePage = request.ImageSourcePage.Trim();
+        entity.Price = request.Price;
+        entity.Weight = request.Weight;
+        entity.WeightUnit = request.WeightUnit.Trim();
+        entity.Unit = request.Unit.Trim();
+        entity.Brand = request.Brand.Trim();
+        entity.Category = request.Category.Trim();
+        entity.Stock = request.Stock;
+        entity.InStock = request.InStock;
+    }
+
     private static BarcodeEntity MapToBarcodeEntity(string mallId, ProductEntity entity)
     {
         return new BarcodeEntity
@@ -286,5 +395,45 @@ public sealed class ProductsController(SwiftCartDbContext dbContext) : Controlle
             InStock = entity.InStock,
             UpdatedAt = DateTime.UtcNow,
         };
+    }
+
+    private static void UpdateBarcodeEntity(BarcodeEntity entity, ProductEntity product)
+    {
+        entity.Barcode = product.Barcode;
+        entity.ProductId = product.ProductId;
+        entity.ProductName = product.Name;
+        entity.ImageUrl = product.ImageUrl;
+        entity.ImageSourcePage = product.ImageSourcePage;
+        entity.Brand = product.Brand;
+        entity.Category = product.Category;
+        entity.Price = product.Price;
+        entity.Unit = product.Unit;
+        entity.InStock = product.InStock;
+        entity.UpdatedAt = DateTime.UtcNow;
+    }
+
+    private static string? ValidateImportProduct(UpsertProductRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return "Product name is required.";
+        }
+
+        if (request.Price < 0)
+        {
+            return "Price cannot be negative.";
+        }
+
+        if (request.Stock < 0)
+        {
+            return "Stock cannot be negative.";
+        }
+
+        if (request.Weight < 0)
+        {
+            return "Weight cannot be negative.";
+        }
+
+        return null;
     }
 }

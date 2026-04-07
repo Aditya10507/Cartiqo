@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import '../app/app.dart';
 import '../providers/mall_manager_provider.dart';
 import '../widgets/swiftcart_logo.dart';
-import 'products_management_screen.dart';
-import 'web_mall_manager_dashboard_screen.dart';
+import 'products_management_screen.dart' deferred as products_management;
+import 'web_mall_manager_dashboard_screen.dart' deferred as web_mall_manager_dashboard;
 
 enum _ManagerAuthMode {
   signIn,
@@ -91,7 +91,8 @@ class _MallManagerLoginScreenState extends State<MallManagerLoginScreen> {
   }
 
   Future<void> _login() async {
-    final success = await context.read<MallManagerProvider>().loginWithEmailPassword(
+    final provider = context.read<MallManagerProvider>();
+    final success = await provider.loginWithEmailPassword(
           email: _emailCtrl.text.trim(),
           password: _passwordCtrl.text,
         );
@@ -99,11 +100,17 @@ class _MallManagerLoginScreenState extends State<MallManagerLoginScreen> {
     if (!mounted) return;
 
     if (success) {
+      if (kIsWeb) {
+        await web_mall_manager_dashboard.loadLibrary();
+      } else {
+        await products_management.loadLibrary();
+      }
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => kIsWeb
-              ? const WebMallManagerDashboardScreen()
-              : const ProductsManagementScreen(),
+              ? web_mall_manager_dashboard.WebMallManagerDashboardScreen()
+              : products_management.ProductsManagementScreen(),
         ),
       );
       return;
@@ -136,11 +143,17 @@ class _MallManagerLoginScreenState extends State<MallManagerLoginScreen> {
     if (!mounted) return;
 
     if (success) {
+      if (kIsWeb) {
+        await web_mall_manager_dashboard.loadLibrary();
+      } else {
+        await products_management.loadLibrary();
+      }
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => kIsWeb
-              ? const WebMallManagerDashboardScreen()
-              : const ProductsManagementScreen(),
+              ? web_mall_manager_dashboard.WebMallManagerDashboardScreen()
+              : products_management.ProductsManagementScreen(),
         ),
       );
       return;

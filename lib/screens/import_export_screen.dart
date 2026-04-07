@@ -293,17 +293,50 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _ImportProgressDialog(
-        productsToImport: _importedProducts,
-        onComplete: (successfully, failed) {
-          Navigator.pop(context);
-          _showImportSummary(successfully, failed);
-        },
+      builder: (context) => const AlertDialog(
+        title: Text('Importing Products'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text(
+              'Uploading products to your mall catalog...',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
+    );
+
+    final provider = context.read<MallManagerProvider>();
+    final result = await provider.importProducts(_importedProducts);
+
+    if (!mounted) return;
+    Navigator.pop(context);
+
+    if (result == null) {
+      _showSnackBar(
+        provider.error ?? 'Import failed. Please try again.',
+        isError: true,
+      );
+      return;
+    }
+
+    _showImportSummary(
+      created: result.createdCount,
+      updated: result.updatedCount,
+      failed: result.failedCount,
+      errors: result.errors,
     );
   }
 
-  void _showImportSummary(int successful, int failed) {
+  void _showImportSummary({
+    required int created,
+    required int updated,
+    required int failed,
+    required List<String> errors,
+  }) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -311,7 +344,7 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (successful > 0)
+            if (created > 0)
               Container(
                 padding: const EdgeInsets.all(12),
                 margin: const EdgeInsets.only(bottom: 12),
@@ -328,13 +361,47 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Successfully imported',
+                            'Created',
                             style: TextStyle(color: Colors.green.shade900, fontSize: 12),
                           ),
                           Text(
-                            '$successful product(s)',
+                            '$created product(s)',
                             style: TextStyle(
                               color: Colors.green.shade900,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (updated > 0)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.sync, color: Colors.blue.shade700, size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Updated existing',
+                            style: TextStyle(color: Colors.blue.shade900, fontSize: 12),
+                          ),
+                          Text(
+                            '$updated product(s)',
+                            style: TextStyle(
+                              color: Colors.blue.shade900,
                               fontWeight: FontWeight.w600,
                               fontSize: 16,
                             ),
@@ -379,6 +446,16 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
                   ],
                 ),
               ),
+            if (errors.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: Text(
+                  errors.take(5).map((error) => '• $error').join('\n'),
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+                ),
+              ),
+            ],
           ],
         ),
         actions: [
@@ -532,7 +609,7 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
                               _buildFormatTable(),
                               const SizedBox(height: 12),
                               Text(
-                                'Required columns: Product Name, Price. Barcode is optional (leave blank or omit the column) and will be auto-generated.',
+                        'Required columns: Product Name, Price. If your mall already has product barcodes, include them and we will preserve them. Barcode is optional only when missing.',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.blue.shade800,
@@ -574,7 +651,7 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
                             ),
                             _buildFeature(
                               'Duplicate detection',
-                              'Prevents duplicate barcodes (when barcodes are provided)',
+                              'If a barcode already exists for this mall, the import updates that product instead of creating a duplicate.',
                             ),
                             _buildFeature(
                               'Error reporting',
@@ -845,82 +922,3 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
   }
 }
 
-class _ImportProgressDialog extends StatefulWidget {
-  final List<MallProduct> productsToImport;
-  final Function(int successful, int failed) onComplete;
-
-  const _ImportProgressDialog({
-    required this.productsToImport,
-    required this.onComplete,
-  });
-
-  @override
-  State<_ImportProgressDialog> createState() => _ImportProgressDialogState();
-}
-
-class _ImportProgressDialogState extends State<_ImportProgressDialog> {
-  late Future<void> _importFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _importFuture = _doImport();
-  }
-
-  Future<void> _doImport() async {
-    final provider = context.read<MallManagerProvider>();
-    int successful = 0;
-    int failed = 0;
-
-    for (int i = 0; i < widget.productsToImport.length; i++) {
-      try {
-        final product = widget.productsToImport[i];
-        final success = await provider.addProduct(product);
-        if (success) {
-          successful++;
-        } else {
-          failed++;
-        }
-      } catch (e) {
-        failed++;
-      }
-      // Small delay to ensure UI updates
-      await Future.delayed(const Duration(milliseconds: 100));
-    }
-
-    if (mounted) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        widget.onComplete(successful, failed);
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Importing Products'),
-      content: FutureBuilder<void>(
-        future: _importFuture,
-        builder: (context, snapshot) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text(
-                'Importing ${widget.productsToImport.length} products...',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Please wait, this may take a moment',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
