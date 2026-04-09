@@ -133,7 +133,8 @@ public sealed class ProductsController(SwiftCartDbContext dbContext) : Controlle
                 var barcode = product.Barcode.Trim();
                 if (string.IsNullOrWhiteSpace(barcode))
                 {
-                    barcode = await GenerateBarcode(normalizedMallId);
+                    barcode = await GenerateBarcode(normalizedMallId, seenBarcodesInImport);
+                    seenBarcodesInImport.Add(barcode);
                 }
                 else if (!seenBarcodesInImport.Add(barcode))
                 {
@@ -305,13 +306,20 @@ public sealed class ProductsController(SwiftCartDbContext dbContext) : Controlle
             StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task<string> GenerateBarcode(string mallId)
+    private async Task<string> GenerateBarcode(
+        string mallId,
+        ISet<string>? reservedBarcodes = null)
     {
         while (true)
         {
             var candidate = $"2{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString()[^11..]}";
             var checkDigit = ComputeEan13CheckDigit(candidate);
             var barcode = $"{candidate}{checkDigit}";
+            if (reservedBarcodes is not null && reservedBarcodes.Contains(barcode))
+            {
+                continue;
+            }
+
             var exists = await dbContext.Barcodes.AsNoTracking().AnyAsync(
                 x => x.MallId == mallId && x.Barcode == barcode);
             if (!exists)

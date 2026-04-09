@@ -1,6 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
 
 import '../models/mall_product.dart';
 import '../providers/mall_manager_provider.dart';
@@ -136,12 +138,11 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
   }
 
   void _copyToClipboard(String content) {
-    // In a real app, you'd use flutter_web_clipboard or similar
-    // For now, show a message
+    Clipboard.setData(ClipboardData(text: content));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+      const SnackBar(
         content: Text('CSV content copied to clipboard'),
-        duration: const Duration(seconds: 2),
+        duration: Duration(seconds: 2),
       ),
     );
   }
@@ -162,14 +163,25 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
         return;
       }
 
-      final fileBytes = result.files.first.bytes;
+      final pickedFile = result.files.first;
+      final fileBytes = pickedFile.bytes;
       if (fileBytes == null) {
         _showSnackBar('Unable to read file', isError: true);
         setState(() => _isLoading = false);
         return;
       }
 
-      final csvContent = String.fromCharCodes(fileBytes);
+      final extension = (pickedFile.extension ?? '').toLowerCase();
+      if (extension == 'xlsx' || extension == 'xls') {
+        _showSnackBar(
+          'Excel import is not supported yet. Please export the file as CSV and try again.',
+          isError: true,
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final csvContent = utf8.decode(fileBytes, allowMalformed: true);
 
       // Parse CSV
       final importResult = CsvService.parseProductsFromCsv(csvContent);
@@ -566,7 +578,7 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Upload a CSV or Excel file to add multiple products at once. All data will be validated before import.',
+                        'Upload a CSV file to add multiple products at once. All data will be validated before import.',
                         style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
                       ),
                       const SizedBox(height: 12),
@@ -717,8 +729,8 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
             const DataCell(Text('1', style: TextStyle(fontSize: 10))),
             const DataCell(Text('L', style: TextStyle(fontSize: 10))),
             const DataCell(Text('Yes', style: TextStyle(fontSize: 10))),
-            const DataCell(Text('https://…', style: TextStyle(fontSize: 10))),
-            const DataCell(Text('https://…', style: TextStyle(fontSize: 10))),
+            const DataCell(Text('https://...', style: TextStyle(fontSize: 10))),
+            const DataCell(Text('https://...', style: TextStyle(fontSize: 10))),
           ]),
         ],
       ),

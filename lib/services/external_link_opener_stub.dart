@@ -1,10 +1,9 @@
-import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 Future<void> openExternalLinkImpl(String url) async {
-  final uri = Uri.parse(url);
-  await launchUrl(
-    uri,
-    mode: LaunchMode.externalApplication,
+  await launchUrlString(
+    url,
+    mode: LaunchMode.platformDefault,
     webOnlyWindowName: '_blank',
   );
 }
