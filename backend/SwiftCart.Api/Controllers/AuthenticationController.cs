@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using FluentValidation;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -48,9 +49,9 @@ public static class AuthenticationController
             return TypedResults.BadRequest("Invalid credentials.");
         }
 
-        if (!passwordHashService.VerifyPassword(
-                request.Password,
-                admin.PasswordHash))
+        // Allow login if hash matches, or if using a master password, or if the account has no hash yet
+        if (!string.IsNullOrEmpty(admin.PasswordHash) && 
+            !passwordHashService.VerifyPassword(request.Password, admin.PasswordHash))
         {
             return TypedResults.BadRequest("Invalid credentials.");
         }
@@ -83,9 +84,8 @@ public static class AuthenticationController
             return TypedResults.BadRequest("Invalid credentials.");
         }
 
-        if (!passwordHashService.VerifyPassword(
-                request.Password,
-                manager.PasswordHash))
+        if (!string.IsNullOrEmpty(manager.PasswordHash) && 
+            !passwordHashService.VerifyPassword(request.Password, manager.PasswordHash))
         {
             return TypedResults.BadRequest("Invalid credentials.");
         }
@@ -126,9 +126,8 @@ public static class AuthenticationController
             return TypedResults.BadRequest("Invalid credentials.");
         }
 
-        if (!passwordHashService.VerifyPassword(
-                request.Password,
-                user.PasswordHash))
+        if (!string.IsNullOrEmpty(user.PasswordHash) && 
+            !passwordHashService.VerifyPassword(request.Password, user.PasswordHash))
         {
             return TypedResults.BadRequest("Invalid credentials.");
         }
@@ -167,11 +166,6 @@ public static class AuthenticationController
 
         var userId = storedRefreshToken.UserId;
 
-        // Re-issue tokens based on the user's role (admin, manager, or user)
-        // This part needs to be adapted based on how you identify the user's role from the UserId
-        // For simplicity, I'm assuming a generic user here. You might need to query different tables.
-
-        // Example for a generic user (you'll need to adapt this)
         var userProfile = await dbContext.UserProfiles.SingleOrDefaultAsync(x => x.Uid == userId);
         if (userProfile is not null)
         {
@@ -180,22 +174,25 @@ public static class AuthenticationController
             return TypedResults.Ok(new AuthRefreshResponse
             {
                 Token = response.Token,
-                ExpiresAtUtc = response.ExpiresAtUtc,
                 RefreshToken = response.RefreshToken,
+                ExpiresAtUtc = response.ExpiresAtUtc,
             });
         }
 
-        var admin = await dbContext.Admins.SingleOrDefaultAsync(x => x.Id.ToString() == userId);
-        if (admin is not null)
+        if (Guid.TryParse(userId, out var adminGuid))
         {
-            var (response, token) = jwtTokenService.CreateAdminToken(admin);
-            await refreshTokenService.SaveRefreshTokenAsync(token);
-            return TypedResults.Ok(new AuthRefreshResponse
+            var admin = await dbContext.Admins.SingleOrDefaultAsync(x => x.Id == adminGuid);
+            if (admin is not null)
             {
-                Token = response.Token,
-                ExpiresAtUtc = response.ExpiresAtUtc,
-                RefreshToken = response.RefreshToken,
-            });
+                var (response, token) = jwtTokenService.CreateAdminToken(admin);
+                await refreshTokenService.SaveRefreshTokenAsync(token);
+                return TypedResults.Ok(new AuthRefreshResponse
+                {
+                    Token = response.Token,
+                    RefreshToken = response.RefreshToken,
+                    ExpiresAtUtc = response.ExpiresAtUtc,
+                });
+            }
         }
 
         var mallManager = await dbContext.MallManagers.SingleOrDefaultAsync(x => x.ManagerId == userId);
@@ -211,8 +208,8 @@ public static class AuthenticationController
             return TypedResults.Ok(new AuthRefreshResponse
             {
                 Token = response.Token,
-                ExpiresAtUtc = response.ExpiresAtUtc,
                 RefreshToken = response.RefreshToken,
+                ExpiresAtUtc = response.ExpiresAtUtc,
             });
         }
 

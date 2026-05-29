@@ -55,9 +55,12 @@ builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddFluentValidationClientsideAdapters();
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("DevClient", policy =>
+    options.AddPolicy("SwiftCartCors", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(
+                "http://localhost:5187", 
+                "http://localhost:3000", 
+                "https://Aditya10507.github.io")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -88,7 +91,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors("DevClient");
+app.UseCors("SwiftCartCors");
 app.UseAuthentication();
 app.UseAuthorization();
 
