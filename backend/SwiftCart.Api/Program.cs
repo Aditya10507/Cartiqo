@@ -60,6 +60,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                 "http://localhost:5187", 
                 "http://localhost:3000", 
+                "https://aditya10507.github.io",
                 "https://Aditya10507.github.io")
             .AllowAnyHeader()
             .AllowAnyMethod();
