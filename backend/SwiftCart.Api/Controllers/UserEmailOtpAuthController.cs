@@ -364,4 +364,54 @@ public sealed class UserEmailOtpAuthController(
 
         return hasUpper && hasLower && hasDigit && hasSpecial;
     }
+
+    private async Task<(TEntity? Entity, ActionResult? ErrorResult)> ValidateOtpEntity<TEntity>(
+        string email,
+        string otp,
+        DbSet<TEntity> dbSet,
+        string missingMessage)
+        where TEntity : class
+    {
+        if (!IsValidEmail(email))
+        {
+            return (null, BadRequest(new { message = "A valid email address is required." }));
+        }
+
+        if (otp.Length != 6 || !otp.All(char.IsDigit))
+        {
+            return (null, BadRequest(new { message = "OTP must be a 6-digit code." }));
+        }
+
+        dynamic? entity = await dbSet.FindAsync(email);
+        if (entity is null)
+        {
+            return (null, NotFound(new { message = missingMessage }));
+        }
+
+        if (entity.ExpiresAtUtc < DateTime.UtcNow)
+        {
+            dbSet.Remove(entity);
+            await dbContext.SaveChangesAsync();
+            return (null, BadRequest(new { message = "OTP expired. Request a new code." }));
+        }
+
+        if (entity.Attempts >= _emailOtpOptions.MaxAttempts)
+        {
+            dbSet.Remove(entity);
+            await dbContext.SaveChangesAsync();
+            return (null, BadRequest(new { message = "Too many incorrect attempts. Request a new code." }));
+        }
+
+        if (!string.Equals((string)entity.OtpCode, otp, StringComparison.Ordinal))
+        {
+            entity.Attempts += 1;
+            entity.UpdatedAtUtc = DateTime.UtcNow;
+            await dbContext.SaveChangesAsync();
+
+            var attemptsLeft = Math.Max(0, _emailOtpOptions.MaxAttempts - (int)entity.Attempts);
+            return (null, BadRequest(new { message = $"Incorrect OTP. {attemptsLeft} attempts remaining." }));
+        }
+
+        return ((TEntity)entity, null);
+    }
 }

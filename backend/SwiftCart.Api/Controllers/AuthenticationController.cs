@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using SwiftCart.Api.Data;
