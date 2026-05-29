@@ -6,6 +6,7 @@ public sealed class MallManagerAuthResponse
 {
     public string Token { get; set; } = string.Empty;
     public DateTime ExpiresAtUtc { get; set; }
+    public string RefreshToken { get; set; } = string.Empty;
     public MallManagerSessionDto Manager { get; set; } = new();
     public MallDto Mall { get; set; } = new();
 }

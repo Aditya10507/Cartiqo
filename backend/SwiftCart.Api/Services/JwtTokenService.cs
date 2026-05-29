@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -11,38 +12,28 @@ using SwiftCart.Api.Models.Malls;
 
 namespace SwiftCart.Api.Services;
 
-public sealed class JwtTokenService(IOptions<JwtOptions> options)
+public sealed class JwtTokenService(
+    IOptions<JwtOptions> jwtOptions,
+    IOptions<RefreshTokenOptions> refreshTokenOptions)
 {
-    private readonly JwtOptions _options = options.Value;
+    private readonly JwtOptions _jwtOptions = jwtOptions.Value;
+    private readonly RefreshTokenOptions _refreshTokenOptions = refreshTokenOptions.Value;
 
-    public AuthResponse CreateAdminToken(AdminEntity admin)
+    public (AuthResponse Response, RefreshToken RefreshToken) CreateAdminToken(AdminEntity admin)
     {
-        var expiresAtUtc = DateTime.UtcNow.AddMinutes(_options.ExpiryMinutes);
-        var claims = new List<Claim>
+        var (token, expiresAtUtc) = GenerateAccessToken(
+            admin.Id.ToString(),
+            admin.Email,
+            admin.Name,
+            admin.Role);
+
+        var refreshToken = GenerateRefreshToken(admin.Id.ToString());
+
+        var response = new AuthResponse
         {
-            new(JwtRegisteredClaimNames.Sub, admin.Id.ToString()),
-            new(JwtRegisteredClaimNames.Email, admin.Email),
-            new(ClaimTypes.Name, admin.Name),
-            new(ClaimTypes.Role, admin.Role),
-        };
-
-        var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_options.SecretKey));
-        var credentials = new SigningCredentials(
-            key,
-            SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            issuer: _options.Issuer,
-            audience: _options.Audience,
-            claims: claims,
-            expires: expiresAtUtc,
-            signingCredentials: credentials);
-
-        return new AuthResponse
-        {
-            Token = new JwtSecurityTokenHandler().WriteToken(token),
+            Token = token,
             ExpiresAtUtc = expiresAtUtc,
+            RefreshToken = refreshToken.Token,
             User = new AdminUserDto
             {
                 AdminId = admin.Id.ToString(),
@@ -52,40 +43,32 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options)
                 CreatedAt = admin.CreatedAt,
             },
         };
+
+        return (response, refreshToken);
     }
 
-    public MallManagerAuthResponse CreateMallManagerToken(
+    public (MallManagerAuthResponse Response, RefreshToken RefreshToken) CreateMallManagerToken(
         MallManagerEntity manager,
         MallEntity mall)
     {
-        var expiresAtUtc = DateTime.UtcNow.AddMinutes(_options.ExpiryMinutes);
-        var claims = new List<Claim>
+        var (token, expiresAtUtc) = GenerateAccessToken(
+            manager.ManagerId,
+            manager.AssignedEmail ?? string.Empty,
+            manager.FullName,
+            "manager",
+            new Dictionary<string, string>
+            {
+                { "mall_id", manager.MallId },
+                { "manager_id", manager.ManagerId },
+            });
+
+        var refreshToken = GenerateRefreshToken(manager.ManagerId);
+
+        var response = new MallManagerAuthResponse
         {
-            new(JwtRegisteredClaimNames.Sub, manager.ManagerId),
-            new(JwtRegisteredClaimNames.Email, manager.AssignedEmail ?? string.Empty),
-            new(ClaimTypes.Name, manager.ManagerId),
-            new(ClaimTypes.Role, "manager"),
-            new("mall_id", manager.MallId),
-            new("manager_id", manager.ManagerId),
-        };
-
-        var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_options.SecretKey));
-        var credentials = new SigningCredentials(
-            key,
-            SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            issuer: _options.Issuer,
-            audience: _options.Audience,
-            claims: claims,
-            expires: expiresAtUtc,
-            signingCredentials: credentials);
-
-        return new MallManagerAuthResponse
-        {
-            Token = new JwtSecurityTokenHandler().WriteToken(token),
+            Token = token,
             ExpiresAtUtc = expiresAtUtc,
+            RefreshToken = refreshToken.Token,
             Manager = new MallManagerSessionDto
             {
                 MallId = manager.MallId,
@@ -98,37 +81,25 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options)
             },
             Mall = MallDto.FromEntity(mall),
         };
+
+        return (response, refreshToken);
     }
 
-    public UserAuthResponse CreateCustomerUserToken(UserProfileEntity user)
+    public (UserAuthResponse Response, RefreshToken RefreshToken) CreateUserToken(UserProfileEntity user)
     {
-        var expiresAtUtc = DateTime.UtcNow.AddMinutes(_options.ExpiryMinutes);
-        var claims = new List<Claim>
+        var (token, expiresAtUtc) = GenerateAccessToken(
+            user.Uid,
+            user.Email,
+            user.Username,
+            "customer");
+
+        var refreshToken = GenerateRefreshToken(user.Uid);
+
+        var response = new UserAuthResponse
         {
-            new(JwtRegisteredClaimNames.Sub, user.Uid),
-            new(JwtRegisteredClaimNames.Email, user.Email),
-            new(ClaimTypes.Name, user.DisplayName),
-            new(ClaimTypes.Role, "customer"),
-            new("user_id", user.Uid),
-        };
-
-        var key = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(_options.SecretKey));
-        var credentials = new SigningCredentials(
-            key,
-            SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            issuer: _options.Issuer,
-            audience: _options.Audience,
-            claims: claims,
-            expires: expiresAtUtc,
-            signingCredentials: credentials);
-
-        return new UserAuthResponse
-        {
-            Token = new JwtSecurityTokenHandler().WriteToken(token),
+            Token = token,
             ExpiresAtUtc = expiresAtUtc,
+            RefreshToken = refreshToken.Token,
             User = new UserSessionDto
             {
                 Uid = user.Uid,
@@ -141,6 +112,60 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options)
                 EmailVerified = user.EmailVerified,
                 Provider = user.Provider,
             },
+        };
+
+        return (response, refreshToken);
+    }
+
+    private (string Token, DateTime ExpiresAtUtc) GenerateAccessToken(
+        string subject,
+        string email,
+        string name,
+        string role,
+        Dictionary<string, string>? customClaims = null)
+    {
+        var expiresAtUtc = DateTime.UtcNow.AddMinutes(_jwtOptions.ExpiryMinutes);
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, subject),
+            new(JwtRegisteredClaimNames.Email, email),
+            new(ClaimTypes.Name, name),
+            new(ClaimTypes.Role, role),
+        };
+
+        if (customClaims is not null)
+        {
+            claims.AddRange(customClaims.Select(c => new Claim(c.Key, c.Value)));
+        }
+
+        var key = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(_jwtOptions.SecretKey));
+        var credentials = new SigningCredentials(
+            key,
+            SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: _jwtOptions.Issuer,
+            audience: _jwtOptions.Audience,
+            claims: claims,
+            expires: expiresAtUtc,
+            signingCredentials: credentials);
+
+        return (new JwtSecurityTokenHandler().WriteToken(token), expiresAtUtc);
+    }
+
+    public RefreshToken GenerateRefreshToken(string userId)
+    {
+        var randomNumber = new byte[64];
+        using var rng = RandomNumberGenerator.Create();
+        rng.GetBytes(randomNumber);
+
+        return new RefreshToken
+        {
+            Token = Convert.ToBase64String(randomNumber),
+            ExpiresAt = DateTime.UtcNow.AddMinutes(_refreshTokenOptions.ExpiryMinutes),
+            CreatedAt = DateTime.UtcNow,
+            UserId = userId,
         };
     }
 }

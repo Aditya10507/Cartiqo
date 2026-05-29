@@ -5,6 +5,8 @@ using Microsoft.IdentityModel.Tokens;
 using SwiftCart.Api.Configuration;
 using SwiftCart.Api.Data;
 using SwiftCart.Api.Services;
+using SwiftCart.Api.Configuration.Validators;
+using FluentValidation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +16,7 @@ var mySqlSection = builder.Configuration.GetSection(MySqlOptions.SectionName);
 var mySqlOptions = mySqlSection.Get<MySqlOptions>() ?? new MySqlOptions();
 var setupSection = builder.Configuration.GetSection(SetupOptions.SectionName);
 var emailOtpSection = builder.Configuration.GetSection(EmailOtpOptions.SectionName);
+var refreshTokenSection = builder.Configuration.GetSection(RefreshTokenOptions.SectionName);
 
 builder.Services.Configure<JwtOptions>(
     jwtSection);
@@ -23,6 +26,8 @@ builder.Services.Configure<SetupOptions>(
     setupSection);
 builder.Services.Configure<EmailOtpOptions>(
     emailOtpSection);
+builder.Services.Configure<RefreshTokenOptions>(
+    refreshTokenSection);
 
 builder.Services.AddDbContext<SwiftCartDbContext>(options =>
 {
@@ -35,10 +40,19 @@ builder.Services.AddDbContext<SwiftCartDbContext>(options =>
 builder.Services.AddScoped<PasswordHashService>();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<UserEmailOtpSender>();
+builder.Services.AddScoped<RefreshTokenService>();
+
+builder.Services.AddScoped<IValidator<AdminLoginRequest>, AdminLoginRequestValidator>();
+builder.Services.AddScoped<IValidator<MallManagerLoginRequest>, MallManagerLoginRequestValidator>();
+builder.Services.AddScoped<IValidator<UserLoginRequest>, UserLoginRequestValidator>();
+builder.Services.AddScoped<IValidator<RefreshTokenRequest>, RefreshTokenRequestValidator>();
+builder.Services.AddScoped<IValidator<MySqlOptions>, MySqlOptionsValidator>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddFluentValidationClientsideAdapters();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevClient", policy =>
@@ -79,5 +93,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapAuthenticationEndpoints();
 
 app.Run();

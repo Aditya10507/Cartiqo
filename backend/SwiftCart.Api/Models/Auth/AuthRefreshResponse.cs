@@ -1,9 +1,8 @@
 namespace SwiftCart.Api.Models.Auth;
 
-public sealed class AuthResponse
+public sealed class AuthRefreshResponse
 {
     public string Token { get; set; } = string.Empty;
-    public DateTime ExpiresAtUtc { get; set; }
     public string RefreshToken { get; set; } = string.Empty;
-    public AdminUserDto User { get; set; } = new();
+    public DateTime ExpiresAtUtc { get; set; }
 }

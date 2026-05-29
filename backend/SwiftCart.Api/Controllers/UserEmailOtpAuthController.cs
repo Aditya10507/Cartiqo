@@ -19,6 +19,7 @@ public sealed class UserEmailOtpAuthController(
     SwiftCartDbContext dbContext,
     JwtTokenService jwtTokenService,
     UserEmailOtpSender userEmailOtpSender,
+    RefreshTokenService refreshTokenService,
     PasswordHashService passwordHashService,
     IOptions<EmailOtpOptions> emailOtpOptions) : ControllerBase
 {
@@ -54,7 +55,7 @@ public sealed class UserEmailOtpAuthController(
 
         var otp = Random.Shared.Next(100000, 999999).ToString();
         var expiresAtUtc = DateTime.UtcNow.AddMinutes(_emailOtpOptions.OtpExpiryMinutes);
-        var passwordHash = passwordHashService.ComputeSha256(password);
+        var passwordHash = passwordHashService.HashPassword(password);
 
         var entity = await dbContext.UserEmailOtps.FirstOrDefaultAsync(x => x.Email == email);
         var isNew = entity is null;
@@ -116,45 +117,18 @@ public sealed class UserEmailOtpAuthController(
         var email = request.Email.Trim().ToLowerInvariant();
         var otp = request.Otp.Trim();
 
-        if (string.IsNullOrWhiteSpace(email) || !IsValidEmail(email))
+        var validationResult = await ValidateOtpEntity(
+            email,
+            otp,
+            dbContext.UserEmailOtps,
+            "OTP not found. Request a new code first.");
+
+        if (validationResult.ErrorResult is not null)
         {
-            return BadRequest(new { message = "A valid email address is required." });
+            return validationResult.ErrorResult;
         }
 
-        if (otp.Length != 6 || !otp.All(char.IsDigit))
-        {
-            return BadRequest(new { message = "OTP must be a 6-digit code." });
-        }
-
-        var otpEntity = await dbContext.UserEmailOtps.FirstOrDefaultAsync(x => x.Email == email);
-        if (otpEntity is null)
-        {
-            return NotFound(new { message = "OTP not found. Request a new code first." });
-        }
-
-        if (otpEntity.ExpiresAtUtc < DateTime.UtcNow)
-        {
-            dbContext.UserEmailOtps.Remove(otpEntity);
-            await dbContext.SaveChangesAsync();
-            return BadRequest(new { message = "OTP expired. Request a new code." });
-        }
-
-        if (otpEntity.Attempts >= _emailOtpOptions.MaxAttempts)
-        {
-            dbContext.UserEmailOtps.Remove(otpEntity);
-            await dbContext.SaveChangesAsync();
-            return BadRequest(new { message = "Too many incorrect attempts. Request a new code." });
-        }
-
-        if (!string.Equals(otpEntity.OtpCode, otp, StringComparison.Ordinal))
-        {
-            otpEntity.Attempts += 1;
-            otpEntity.UpdatedAtUtc = DateTime.UtcNow;
-            await dbContext.SaveChangesAsync();
-
-            var attemptsLeft = Math.Max(0, _emailOtpOptions.MaxAttempts - otpEntity.Attempts);
-            return BadRequest(new { message = $"Incorrect OTP. {attemptsLeft} attempts remaining." });
-        }
+        var otpEntity = validationResult.Entity!;
 
         var usernameTaken = await dbContext.UserProfiles.AnyAsync(x => x.Username == otpEntity.Username);
         if (usernameTaken)
@@ -183,37 +157,10 @@ public sealed class UserEmailOtpAuthController(
         dbContext.UserEmailOtps.Remove(otpEntity);
         await dbContext.SaveChangesAsync();
 
-        return Ok(jwtTokenService.CreateCustomerUserToken(user));
-    }
+        var (response, token) = jwtTokenService.CreateUserToken(user);
+        await refreshTokenService.SaveRefreshTokenAsync(token);
 
-    [HttpPost("login")]
-    public async Task<ActionResult<UserAuthResponse>> Login(UserLoginRequest request)
-    {
-        var username = request.Username.Trim().ToLowerInvariant();
-        var password = request.Password;
-
-        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
-        {
-            return BadRequest(new { message = "Username and password are required." });
-        }
-
-        var user = await dbContext.UserProfiles.FirstOrDefaultAsync(x => x.Username == username);
-        if (user is null || string.IsNullOrWhiteSpace(user.PasswordHash))
-        {
-            return Unauthorized(new { message = "Invalid username or password." });
-        }
-
-        var passwordHash = passwordHashService.ComputeSha256(password);
-        if (!string.Equals(passwordHash, user.PasswordHash, StringComparison.Ordinal))
-        {
-            return Unauthorized(new { message = "Invalid username or password." });
-        }
-
-        user.LastLoginAt = DateTime.UtcNow;
-        user.UpdatedAt = DateTime.UtcNow;
-        await dbContext.SaveChangesAsync();
-
-        return Ok(jwtTokenService.CreateCustomerUserToken(user));
+        return Ok(response);
     }
 
     [HttpPost("password/request-otp")]
@@ -342,7 +289,7 @@ public sealed class UserEmailOtpAuthController(
             return BadRequest(new { message = $"Incorrect OTP. {attemptsLeft} attempts remaining." });
         }
 
-        user.PasswordHash = passwordHashService.ComputeSha256(newPassword);
+        user.PasswordHash = passwordHashService.HashPassword(newPassword);
         user.UpdatedAt = DateTime.UtcNow;
         dbContext.UserPasswordResetOtps.Remove(otpEntity);
         await dbContext.SaveChangesAsync();

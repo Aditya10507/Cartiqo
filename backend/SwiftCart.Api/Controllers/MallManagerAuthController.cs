@@ -19,6 +19,7 @@ public sealed class MallManagerAuthController(
     SwiftCartDbContext dbContext,
     JwtTokenService jwtTokenService,
     UserEmailOtpSender userEmailOtpSender,
+    RefreshTokenService refreshTokenService,
     PasswordHashService passwordHashService,
     IOptions<EmailOtpOptions> emailOtpOptions) : ControllerBase
 {
@@ -57,7 +58,7 @@ public sealed class MallManagerAuthController(
 
         var otp = GenerateOtp();
         var expiresAtUtc = DateTime.UtcNow.AddMinutes(_emailOtpOptions.OtpExpiryMinutes);
-        var passwordHash = passwordHashService.ComputeSha256(request.Password);
+        var passwordHash = passwordHashService.HashPassword(request.Password);
 
         var entity = await dbContext.MallManagerEmailOtps.FirstOrDefaultAsync(x => x.Email == email);
         var isNew = entity is null;
@@ -142,53 +143,10 @@ public sealed class MallManagerAuthController(
         dbContext.MallManagerEmailOtps.Remove(otpEntity);
         await dbContext.SaveChangesAsync();
 
-        return Ok(jwtTokenService.CreateMallManagerToken(manager, mall));
-    }
+        var (response, token) = jwtTokenService.CreateMallManagerToken(manager, mall);
+        await refreshTokenService.SaveRefreshTokenAsync(token);
 
-    [HttpPost("login")]
-    public async Task<ActionResult<MallManagerAuthResponse>> Login(
-        MallManagerLoginRequest request)
-    {
-        var email = request.Email.Trim().ToLowerInvariant();
-        var password = request.Password;
-
-        if (!IsValidEmail(email))
-        {
-            return BadRequest(new { message = "A valid email address is required." });
-        }
-
-        if (string.IsNullOrWhiteSpace(password))
-        {
-            return BadRequest(new { message = "Password is required." });
-        }
-
-        var manager = await dbContext.MallManagers.FirstOrDefaultAsync(
-            x => x.AssignedEmail != null &&
-                 x.AssignedEmail.ToLower() == email &&
-                 x.IsActive);
-
-        if (manager is null || string.IsNullOrWhiteSpace(manager.PasswordHash))
-        {
-            return Unauthorized(new { message = "Invalid email or password." });
-        }
-
-        var passwordHash = passwordHashService.ComputeSha256(password);
-        if (!string.Equals(passwordHash, manager.PasswordHash, StringComparison.Ordinal))
-        {
-            return Unauthorized(new { message = "Invalid email or password." });
-        }
-
-        var mall = await dbContext.Malls.FirstOrDefaultAsync(x => x.MallId == manager.MallId);
-        if (mall is null)
-        {
-            return NotFound(new { message = "Mall not found for this manager." });
-        }
-
-        manager.LastLoginAt = DateTime.UtcNow;
-        manager.UpdatedAt = DateTime.UtcNow;
-        await dbContext.SaveChangesAsync();
-
-        return Ok(jwtTokenService.CreateMallManagerToken(manager, mall));
+        return Ok(response);
     }
 
     [HttpPost("password/request-otp")]
@@ -287,7 +245,7 @@ public sealed class MallManagerAuthController(
         }
 
         var otpEntity = validationResult.Entity!;
-        manager.PasswordHash = passwordHashService.ComputeSha256(request.NewPassword);
+        manager.PasswordHash = passwordHashService.HashPassword(request.NewPassword);
         manager.PasswordUpdatedAt = DateTime.UtcNow;
         manager.UpdatedAt = DateTime.UtcNow;
 

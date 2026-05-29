@@ -22,10 +22,27 @@ public sealed class SwiftCartDbContext(DbContextOptions<SwiftCartDbContext> opti
     public DbSet<SupportRequestEntity> SupportRequests => Set<SupportRequestEntity>();
     public DbSet<PromotionEntity> Promotions => Set<PromotionEntity>();
     public DbSet<StaffActivityEntity> StaffActivities => Set<StaffActivityEntity>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.ToTable("refresh_tokens");
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.UserId).HasColumnName("user_id").HasMaxLength(128);
+            entity.Property(x => x.Token).HasColumnName("token").HasMaxLength(256);
+            entity.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+            entity.Property(x => x.IsRevoked).HasColumnName("is_revoked");
+
+            entity.HasIndex(x => x.Token).IsUnique();
+            entity.HasIndex(x => x.UserId);
+        });
 
         modelBuilder.Entity<AdminEntity>(entity =>
         {

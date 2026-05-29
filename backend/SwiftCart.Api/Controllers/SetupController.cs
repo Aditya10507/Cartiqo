@@ -50,7 +50,7 @@ public sealed class SetupController(
         {
             Name = request.Name.Trim(),
             Email = email,
-            PasswordHash = passwordHashService.ComputeSha256(password),
+            PasswordHash = passwordHashService.HashPassword(password),
             Role = string.IsNullOrWhiteSpace(request.Role) ? "super_admin" : request.Role.Trim(),
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
