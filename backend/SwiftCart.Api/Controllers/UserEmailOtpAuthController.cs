@@ -259,35 +259,18 @@ public sealed class UserEmailOtpAuthController(
             return NotFound(new { message = "No account found for that email address." });
         }
 
-        var otpEntity = await dbContext.UserPasswordResetOtps.FirstOrDefaultAsync(x => x.Email == email);
-        if (otpEntity is null)
+        var validationResult = await ValidateOtpEntity(
+            email,
+            otp,
+            dbContext.UserPasswordResetOtps,
+            "OTP not found. Request a new code first.");
+
+        if (validationResult.ErrorResult is not null)
         {
-            return NotFound(new { message = "OTP not found. Request a new code first." });
+            return validationResult.ErrorResult;
         }
 
-        if (otpEntity.ExpiresAtUtc < DateTime.UtcNow)
-        {
-            dbContext.UserPasswordResetOtps.Remove(otpEntity);
-            await dbContext.SaveChangesAsync();
-            return BadRequest(new { message = "OTP expired. Request a new code." });
-        }
-
-        if (otpEntity.Attempts >= _emailOtpOptions.MaxAttempts)
-        {
-            dbContext.UserPasswordResetOtps.Remove(otpEntity);
-            await dbContext.SaveChangesAsync();
-            return BadRequest(new { message = "Too many incorrect attempts. Request a new code." });
-        }
-
-        if (!string.Equals(otpEntity.OtpCode, otp, StringComparison.Ordinal))
-        {
-            otpEntity.Attempts += 1;
-            otpEntity.UpdatedAtUtc = DateTime.UtcNow;
-            await dbContext.SaveChangesAsync();
-
-            var attemptsLeft = Math.Max(0, _emailOtpOptions.MaxAttempts - otpEntity.Attempts);
-            return BadRequest(new { message = $"Incorrect OTP. {attemptsLeft} attempts remaining." });
-        }
+        var otpEntity = validationResult.Entity!;
 
         user.PasswordHash = passwordHashService.HashPassword(newPassword);
         user.UpdatedAt = DateTime.UtcNow;
