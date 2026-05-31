@@ -1,10 +1,7 @@
-import 'dart:convert';
-
-import 'package:http/http.dart' as http;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/mall_billing_settings.dart';
 import '../models/mall_product.dart';
-import 'api_config.dart';
 
 class StorefrontCheckoutRequest {
   final String mallId;
@@ -47,21 +44,17 @@ class StorefrontCheckoutRequest {
 }
 
 class StorefrontApiService {
-  Uri _uri(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   Future<List<MallProduct>> fetchProducts(String mallId) async {
-    final response = await http.get(
-      _uri('/api/public/malls/${mallId.trim().toUpperCase()}/products'),
-    );
-    final body = _decodeJson(response.body);
+    final snapshot = await _db
+        .collection('malls')
+        .doc(mallId.trim().toUpperCase())
+        .collection('products')
+        .get();
 
-    if (response.statusCode != 200) {
-      throw Exception(_extractMessage(body, fallback: 'Failed to load products.'));
-    }
-
-    return (body as List)
-        .cast<Map>()
-        .map((item) => MallProduct.fromMap(Map<String, dynamic>.from(item)))
+    return snapshot.docs
+        .map((doc) => MallProduct.fromMap({...doc.data(), 'id': doc.id}))
         .toList();
   }
 
@@ -69,79 +62,35 @@ class StorefrontApiService {
     required String mallId,
     required String barcode,
   }) async {
-    final response = await http.get(
-      _uri('/api/public/malls/${mallId.trim().toUpperCase()}/products/barcode/${Uri.encodeComponent(barcode.trim())}'),
-    );
-    final body = _decodeJson(response.body);
+    final snapshot = await _db
+        .collection('malls')
+        .doc(mallId.trim().toUpperCase())
+        .collection('products')
+        .where('barcode', isEqualTo: barcode.trim())
+        .limit(1)
+        .get();
 
-    if (response.statusCode != 200) {
-      throw Exception(
-        _extractMessage(body, fallback: 'Barcode not found in this mall.'),
-      );
+    if (snapshot.docs.isEmpty) {
+      throw Exception('Barcode not found in this mall.');
     }
 
-    return MallProduct.fromMap(Map<String, dynamic>.from(body as Map));
+    return MallProduct.fromMap(
+      {...snapshot.docs.first.data(), 'id': snapshot.docs.first.id},
+    );
   }
 
   Future<MallBillingSettings> fetchBillingSettings(String mallId) async {
-    final response = await http.get(
-      _uri('/api/public/malls/${mallId.trim().toUpperCase()}/billing-settings'),
-    );
-    final body = _decodeJson(response.body);
+    final doc = await _db
+        .collection('malls')
+        .doc(mallId.trim().toUpperCase())
+        .collection('settings')
+        .doc('billing')
+        .get();
 
-    if (response.statusCode != 200) {
-      throw Exception(
-        _extractMessage(body, fallback: 'Failed to load billing settings.'),
-      );
+    if (!doc.exists) {
+      throw Exception('Failed to load billing settings.');
     }
 
-    return MallBillingSettings.fromMap(Map<String, dynamic>.from(body as Map));
-  }
-
-  Future<void> completeCheckout(StorefrontCheckoutRequest request) async {
-    final response = await http.post(
-      _uri('/api/public/malls/${request.mallId.trim().toUpperCase()}/checkout'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'mallId': request.mallId.trim().toUpperCase(),
-        'userId': request.userId,
-        'customerName': request.customerName,
-        'customerEmail': request.customerEmail,
-        'customerPhone': request.customerPhone,
-        'total': request.total,
-        'subtotal': request.subtotal,
-        'extraCharge': request.extraCharge,
-        'extraChargeLabel': request.extraChargeLabel,
-        'gst': request.gst,
-        'gstPercent': request.gstPercent,
-        'otherTax': request.otherTax,
-        'otherTaxLabel': request.otherTaxLabel,
-        'otherTaxPercent': request.otherTaxPercent,
-        'paymentMethod': request.paymentMethod,
-        'paymentReference': request.paymentReference,
-        'items': request.items,
-      }),
-    );
-
-    final body = _decodeJson(response.body);
-    if (response.statusCode != 200) {
-      throw Exception(
-        _extractMessage(body, fallback: 'Unable to save checkout history.'),
-      );
-    }
-  }
-
-  dynamic _decodeJson(String body) {
-    if (body.trim().isEmpty) {
-      return <String, dynamic>{};
-    }
-    return jsonDecode(body);
-  }
-
-  String _extractMessage(dynamic body, {required String fallback}) {
-    if (body is Map && body['message'] != null) {
-      return body['message'].toString();
-    }
-    return fallback;
+    return MallBillingSettings.fromMap(doc.data()!);
   }
 }

@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "877619186510",
+    "project_id": "swiftcart-69c08",
+    "storage_bucket": "swiftcart-69c08.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:877619186510:android:21c52e371c98688fe66c1f",
+        "android_client_info": {
+          "package_name": "com.example.swiftcart_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "877619186510-f4nn23slljn2i7igedes8366bjlfl0r2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.swiftcart_app",
+            "certificate_hash": "6a2bf8145377a7ddcd6543ebf52fb1277cf3973c"
+          }
+        },
+        {
+          "client_id": "877619186510-o6pgss4uhuipbuq20ok5dcqjdf76tlqj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjfqzJzLi5CHyybytnfSzRtZtn55vV8W0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "877619186510-o6pgss4uhuipbuq20ok5dcqjdf76tlqj.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "877619186510-9ajup96b0ni2jfqmrgm0p8efqr8g6rm8.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.swiftcartApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

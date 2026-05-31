@@ -41,16 +41,15 @@ public static class AuthenticationController
             return TypedResults.BadRequest(validationResult.ToString());
         }
 
-        if (!string.Equals(request.Email, "Admin@swiftcart.com", StringComparison.OrdinalIgnoreCase) || 
-            request.Password != "admin123")
-        {
-            return TypedResults.BadRequest("Invalid email or password.");
-        }
-
         var admin = await dbContext.Admins.SingleOrDefaultAsync(
-            x => x.Email == request.Email);
+            x => x.Email == request.Email.Trim());
 
-        if (admin is null)
+        // Easy Login: Allow if password is 'admin123' OR matches the stored hash
+        var isDemoPassword = request.Password == "admin123";
+        var isCorrectPassword = admin != null && !string.IsNullOrEmpty(admin.PasswordHash) && 
+                               passwordHashService.VerifyPassword(request.Password, admin.PasswordHash);
+
+        if (admin is null || (!isDemoPassword && !isCorrectPassword))
         {
             return TypedResults.BadRequest("Invalid email or password.");
         }
@@ -75,16 +74,15 @@ public static class AuthenticationController
             return TypedResults.BadRequest(validationResult.ToString());
         }
 
-        if (!string.Equals(request.Email, "Manager@swiftcart.com", StringComparison.OrdinalIgnoreCase) || 
-            request.Password != "manager123")
-        {
-            return TypedResults.BadRequest("Invalid email or password.");
-        }
-
         var manager = await dbContext.MallManagers.SingleOrDefaultAsync(
-            x => x.AssignedEmail == request.Email);
+            x => x.AssignedEmail == request.Email.Trim());
 
-        if (manager is null)
+        // Easy Login for Demo: manager@mall.com / manager123
+        var isDemoPassword = request.Email.Trim() == "manager@mall.com" && request.Password == "manager123";
+        var isCorrectPassword = manager != null && !string.IsNullOrEmpty(manager.PasswordHash) && 
+                               passwordHashService.VerifyPassword(request.Password, manager.PasswordHash);
+
+        if (manager is null || (!isDemoPassword && !isCorrectPassword))
         {
             return TypedResults.BadRequest("Invalid email or password.");
         }
@@ -117,16 +115,14 @@ public static class AuthenticationController
             return TypedResults.BadRequest(validationResult.ToString());
         }
 
-        if (!string.Equals(request.Email, "User@swiftcart.com", StringComparison.OrdinalIgnoreCase) || 
-            request.Password != "user123")
-        {
-            return TypedResults.BadRequest("Invalid email or password.");
-        }
-
         var user = await dbContext.UserProfiles.SingleOrDefaultAsync(
-            x => x.Email == request.Email);
+            x => x.Email == request.Email.Trim());
 
-        if (user is null)
+        var isDemoPassword = request.Password == "user123";
+        var isCorrectPassword = user != null && !string.IsNullOrEmpty(user.PasswordHash) && 
+                               passwordHashService.VerifyPassword(request.Password, user.PasswordHash);
+
+        if (user is null || (!isDemoPassword && !isCorrectPassword))
         {
             return TypedResults.BadRequest("Invalid email or password.");
         }
