@@ -52,6 +52,11 @@ public sealed class MallManagersController(
             return BadRequest(new { message = "Manager ID is required." });
         }
 
+        if (string.IsNullOrWhiteSpace(request.Email))
+        {
+            return BadRequest(new { message = "Manager email is required for account activation." });
+        }
+
         var mallExists = await dbContext.Malls.AnyAsync(x => x.MallId == normalizedMallId);
         if (!mallExists)
         {
@@ -69,13 +74,21 @@ public sealed class MallManagersController(
             return Conflict(new { message });
         }
 
+        var emailNormalized = request.Email.Trim().ToLowerInvariant();
+        var emailExists = await dbContext.MallManagers
+            .AnyAsync(x => x.AssignedEmail != null && x.AssignedEmail.ToLower() == emailNormalized);
+        if (emailExists)
+        {
+            return Conflict(new { message = "This email is already assigned to a mall manager." });
+        }
+
         var now = DateTime.UtcNow;
         var entity = new MallManagerEntity
         {
             MallId = normalizedMallId,
             ManagerId = normalizedManagerId,
             AssignedUid = null,
-            AssignedEmail = null,
+            AssignedEmail = request.Email.Trim(),
             IsActive = true,
             PasswordHash = string.Empty,
             PasswordUpdatedAt = null,
